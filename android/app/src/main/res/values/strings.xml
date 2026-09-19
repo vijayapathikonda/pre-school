@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ChildObs</string>
+    <string name="title_activity_main">ChildObs</string>
+    <string name="package_name">com.preschool.childobs</string>
+    <string name="custom_url_scheme">com.preschool.childobs</string>
+</resources>
