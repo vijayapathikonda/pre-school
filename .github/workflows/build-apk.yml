@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,8 +43,24 @@ jobs:
         chmod +x gradlew
         ./gradlew assembleDebug
 
+    - name: Rename APK to School Name
+      run: |
+        cp android/app/build/outputs/apk/debug/app-debug.apk Pragathi-Vidyalaya-School.apk
+
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: preschool-child-observation-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        name: Pragathi-Vidyalaya-School-APK
+        path: Pragathi-Vidyalaya-School.apk
+
+    - name: Publish Direct Download to GitHub Releases
+      uses: softprops/action-gh-release@v2
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      with:
+        tag_name: latest
+        name: "Pragathi Vidyalaya School Mobile APK"
+        body: "Latest Android APK for Pragathi Vidyalaya School Daily Child Observation Portal."
+        files: Pragathi-Vidyalaya-School.apk
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
