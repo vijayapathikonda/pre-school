@@ -9,38 +9,54 @@ import { DailySummaryList } from './components/observation/DailySummaryList';
 import { StudentList } from './components/roster/StudentList';
 import { ReportsView } from './components/reports/ReportsView';
 import { SettingsModal } from './components/settings/SettingsModal';
+import { LoginPage, AuthUser } from './components/auth/LoginPage';
 
 export const App: React.FC = () => {
   const [ready, setReady] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    const saved = localStorage.getItem('pragathi_auth_user');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
   const [currentTab, setCurrentTab] = useState<TabType>('observation');
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedClassroomId, setSelectedClassroomId] = useState<string>('ALL');
+  const [selectedClassroomId, setSelectedClassroomId] = useState<string>('c_jnana');
   const [activeStudentId, setActiveStudentId] = useState<string>('');
   const [observations, setObservations] = useState<DailyObservation[]>([]);
-  const [schoolName, setSchoolName] = useState<string>('Sunshine Preschool & Academy');
+  const [schoolName, setSchoolName] = useState<string>('Pragathi Vidyalaya School');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Initialize DB and load initial data
+  // Initialize DB and load data
   const loadData = useCallback(async () => {
     await initializeDatabase();
 
     const storedClassrooms = await db.classrooms.toArray();
     const storedStudents = await db.students.filter((s) => s.active).toArray();
     const schoolNameSetting = await db.settings.get('schoolName');
-    const activeClassSetting = await db.settings.get('activeClassroomId');
 
     setClassrooms(storedClassrooms);
     setStudents(storedStudents);
 
     if (schoolNameSetting) setSchoolName(schoolNameSetting.value);
-    if (activeClassSetting && activeClassSetting.value) {
-      setSelectedClassroomId(activeClassSetting.value);
-    } else if (storedClassrooms.length > 0) {
-      setSelectedClassroomId(storedClassrooms[0].id);
+
+    // If active class is invalid, default to first class (Nursery Jnana)
+    if (storedClassrooms.length > 0) {
+      setSelectedClassroomId((prev) => {
+        if (prev === 'ALL') return prev;
+        const exists = storedClassrooms.some((c) => c.id === prev);
+        return exists ? prev : storedClassrooms[0].id;
+      });
     }
 
     setReady(true);
@@ -138,12 +154,33 @@ export const App: React.FC = () => {
     await db.settings.put({ key: 'schoolName', value: name });
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('pragathi_auth_user');
+    setCurrentUser(null);
+  };
+
+  // If user is not logged in, show mandatory LoginPage first!
+  if (!currentUser) {
+    return (
+      <LoginPage
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          // If teacher logs in, ensure a specific classroom is selected
+          if (user.role === 'teacher' && selectedClassroomId === 'ALL') {
+            setSelectedClassroomId(classrooms[0]?.id || 'c_jnana');
+          }
+        }}
+        schoolName={schoolName}
+      />
+    );
+  }
+
   if (!ready) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
         <div className="text-center space-y-3">
           <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-xs font-semibold text-slate-300">Loading Preschool Portal...</p>
+          <p className="text-xs font-semibold text-slate-300">Loading Pragathi Vidyalaya Portal...</p>
         </div>
       </div>
     );
@@ -151,7 +188,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col selection:bg-indigo-600 selection:text-white">
-      {/* Top Header */}
+      {/* Top Header with School Logo, Dynamic Title & Logout */}
       <Header
         selectedDate={selectedDate}
         onDateChange={setSelectedDate}
@@ -161,6 +198,8 @@ export const App: React.FC = () => {
         onOpenSettings={() => setIsSettingsOpen(true)}
         schoolName={schoolName}
         totalStudents={students.length}
+        currentUser={currentUser}
+        onLogout={handleLogout}
       />
 
       {/* Main View Area */}
@@ -215,6 +254,7 @@ export const App: React.FC = () => {
             classrooms={classrooms}
             selectedClassroomId={selectedClassroomId}
             onRefreshRoster={loadData}
+            isAdmin={currentUser.role === 'admin'}
           />
         )}
 
