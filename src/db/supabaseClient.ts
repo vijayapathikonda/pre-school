@@ -3,9 +3,13 @@ import { DailyObservation, Student, Classroom } from '../types/observation';
 
 let supabaseInstance: SupabaseClient | null = null;
 
+export const DEFAULT_SUPABASE_URL = 'https://ctounkidbhnfrcrjnmmu.supabase.co';
+export const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0b3Vua2lkYmhuZnJjcmpubW11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3OTkxNTIsImV4cCI6MjEwNTM3NTE1Mn0.5cjuHaaSs0rfaRML3s7iNahDuRzaH0ZGMK_2BAeQAZs';
+
 export function getSupabaseCredentials(): { url: string; key: string } {
-  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://ctounkidbhnfrcrjnmmu.supabase.co';
-  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
   const storedUrl = localStorage.getItem('supabase_url') || envUrl;
   const storedKey = localStorage.getItem('supabase_anon_key') || envKey;
   return { url: storedUrl, key: storedKey };
@@ -221,3 +225,168 @@ export async function testSupabaseConnection(url?: string, key?: string): Promis
     return { success: false, message: `Network connection failed: ${err.message || 'Cannot reach Supabase'}` };
   }
 }
+
+// -------------------------------------------------------------
+// Cloud Data Pull & Realtime Synchronization Functions
+// -------------------------------------------------------------
+
+export function mapRowToObservation(row: any): DailyObservation {
+  return {
+    id: row.id,
+    studentId: row.student_id,
+    date: row.date,
+    present: row.present ?? true,
+    engagement: row.engagement,
+    participation: row.participation,
+    following: row.following,
+    thinking: row.thinking || [],
+    social: row.social || [],
+    state: row.state || [],
+    interest: row.interest,
+    interestDetail: row.interest_detail,
+    additionalObservation: row.additional_observation,
+    recordedAt: row.recorded_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+    synced: true
+  };
+}
+
+export function mapRowToStudent(row: any): Student {
+  return {
+    id: row.id,
+    name: row.name,
+    classroomId: row.classroom_id || '',
+    classroomName: row.classroom_name || '',
+    photoUrl: row.photo_url || undefined,
+    avatarColor: row.avatar_color || undefined,
+    notes: row.notes || undefined,
+    active: row.active ?? true,
+    createdAt: row.created_at || new Date().toISOString()
+  };
+}
+
+export function mapRowToClassroom(row: any): Classroom {
+  return {
+    id: row.id,
+    name: row.name,
+    ageGroup: row.age_group || 'Preschool',
+    teacherName: row.teacher_name || undefined
+  };
+}
+
+// Fetch all observations for a given date from Supabase
+export async function fetchCloudObservations(date: string): Promise<DailyObservation[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('daily_observations')
+      .select('*')
+      .eq('date', date);
+
+    if (error) {
+      console.warn('Error fetching cloud observations:', error);
+      return [];
+    }
+
+    return (data || []).map(mapRowToObservation);
+  } catch (err) {
+    console.warn('Network error fetching cloud observations:', err);
+    return [];
+  }
+}
+
+// Fetch complete observation history for a specific student
+export async function fetchStudentCloudHistory(studentId: string): Promise<DailyObservation[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('daily_observations')
+      .select('*')
+      .eq('student_id', studentId)
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.warn('Error fetching student cloud history:', error);
+      return [];
+    }
+
+    return (data || []).map(mapRowToObservation);
+  } catch (err) {
+    console.warn('Network error fetching student cloud history:', err);
+    return [];
+  }
+}
+
+// Fetch entire roster (classrooms and active students) from Supabase
+export async function fetchCloudRoster(): Promise<{ classrooms: Classroom[]; students: Student[] } | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  try {
+    const [cRes, sRes] = await Promise.all([
+      supabase.from('classrooms').select('*').order('name'),
+      supabase.from('students').select('*').eq('active', true).order('name')
+    ]);
+
+    if (cRes.error) {
+      console.warn('Error fetching classrooms from cloud:', cRes.error);
+    }
+    if (sRes.error) {
+      console.warn('Error fetching students from cloud:', sRes.error);
+    }
+
+    const classrooms = (cRes.data || []).map(mapRowToClassroom);
+    const students = (sRes.data || []).map(mapRowToStudent);
+
+    if (classrooms.length > 0 || students.length > 0) {
+      return { classrooms, students };
+    }
+    return null;
+  } catch (err) {
+    console.warn('Network error fetching cloud roster:', err);
+    return null;
+  }
+}
+
+// Subscribe to real-time changes on daily_observations for a specific date
+export function subscribeToCloudObservations(
+  date: string,
+  onUpdate: (obs: DailyObservation) => void
+): () => void {
+  const supabase = getSupabase();
+  if (!supabase) return () => {};
+
+  try {
+    const channelName = `realtime-obs-${date}-${Math.random().toString(36).substring(2, 7)}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'daily_observations',
+          filter: `date=eq.${date}`
+        },
+        (payload) => {
+          if (payload.new && (payload.new as any).student_id) {
+            const mapped = mapRowToObservation(payload.new);
+            onUpdate(mapped);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  } catch (err) {
+    console.warn('Realtime subscription error:', err);
+    return () => {};
+  }
+}
+

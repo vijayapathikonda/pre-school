@@ -5,6 +5,7 @@ import { FileText, Download, Share2, Calendar } from 'lucide-react';
 import { generateDailyObservationPDF } from './pdfGenerator';
 import { shareViaWhatsApp } from '../../utils/whatsappShare';
 import { exportObservationsToCSV, downloadFile } from '../../db/exportImport';
+import { fetchStudentCloudHistory } from '../../db/supabaseClient';
 
 interface ReportsViewProps {
   students: Student[];
@@ -27,13 +28,33 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
     const fetchHistory = async () => {
       setLoading(true);
-      const records = await db.observations
+      // 1. Instantly display local IndexedDB records
+      const localRecords = await db.observations
         .where('studentId')
         .equals(selectedStudentId)
         .reverse()
         .sortBy('date');
-      setStudentHistory(records);
-      setLoading(false);
+      setStudentHistory(localRecords);
+
+      // 2. Pull student history from Supabase cloud so records from other devices appear
+      try {
+        const cloudRecords = await fetchStudentCloudHistory(selectedStudentId);
+        if (cloudRecords && cloudRecords.length > 0) {
+          for (const obs of cloudRecords) {
+            await db.observations.put(obs);
+          }
+          const updatedRecords = await db.observations
+            .where('studentId')
+            .equals(selectedStudentId)
+            .reverse()
+            .sortBy('date');
+          setStudentHistory(updatedRecords);
+        }
+      } catch (err) {
+        console.warn('Could not fetch student cloud history:', err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchHistory();

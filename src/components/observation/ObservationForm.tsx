@@ -25,7 +25,8 @@ import {
   FileDown,
   AlertCircle,
   Save,
-  MessageSquare
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import { generateDailyObservationPDF } from '../reports/pdfGenerator';
 import { shareViaWhatsApp } from '../../utils/whatsappShare';
@@ -40,6 +41,7 @@ interface ObservationFormProps {
   hasNext: boolean;
   hasPrev: boolean;
   schoolName: string;
+  onNotify?: (title: string, message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
 export const ObservationForm: React.FC<ObservationFormProps> = ({
@@ -52,6 +54,7 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
   hasNext,
   hasPrev,
   schoolName,
+  onNotify,
 }) => {
   const [present, setPresent] = useState<boolean>(initialObservation?.present ?? true);
   const [engagement, setEngagement] = useState<EngagementOption | undefined>(initialObservation?.engagement);
@@ -124,16 +127,64 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
       updatedAt: new Date().toISOString(),
     };
 
-    await onSave(observation);
-    setIsSaving(false);
-    setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 2500);
+    try {
+      await onSave(observation);
+      setSavedNotice(true);
+      onNotify?.(
+        'Record Saved!',
+        `Observation for ${student.name} was saved successfully.`,
+        'success'
+      );
+      setTimeout(() => setSavedNotice(false), 3000);
+    } catch (err: any) {
+      onNotify?.('Error Saving', err?.message || 'Could not save record.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleSaveAndNext = async () => {
-    await handleSaveOnly();
-    if (hasNext) {
-      onNextStudent();
+    setIsSaving(true);
+    const observation: DailyObservation = {
+      id: initialObservation?.id,
+      studentId: student.id,
+      date,
+      present,
+      engagement: present ? engagement : undefined,
+      participation: present ? participation : undefined,
+      following: present ? following : undefined,
+      thinking: present ? thinking : [],
+      social: present ? social : [],
+      state: present ? state : [],
+      interest: present ? interest : undefined,
+      interestDetail: present ? interestDetail : undefined,
+      additionalObservation: present ? additionalObservation : undefined,
+      recordedAt: initialObservation?.recordedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await onSave(observation);
+      if (hasNext) {
+        onNotify?.(
+          'Saved & Next Child',
+          `Observation saved for ${student.name}! Loading next child...`,
+          'success'
+        );
+        onNextStudent();
+      } else {
+        setSavedNotice(true);
+        onNotify?.(
+          'Section Completed!',
+          `Observation saved for ${student.name}! All children completed in this section.`,
+          'success'
+        );
+        setTimeout(() => setSavedNotice(false), 3000);
+      }
+    } catch (err: any) {
+      onNotify?.('Error Saving', err?.message || 'Could not save record.', 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -216,8 +267,11 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
           <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
             <button
               type="button"
-              onClick={() => setPresent(true)}
-              className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${
+              onClick={() => {
+                setPresent(true);
+                onNotify?.('Attendance', `${student.name} marked Present`, 'info');
+              }}
+              className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all active:scale-95 ${
                 present
                   ? 'bg-white text-emerald-700 shadow-xs ring-1 ring-slate-200'
                   : 'text-slate-600 hover:text-slate-900'
@@ -227,8 +281,11 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setPresent(false)}
-              className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${
+              onClick={() => {
+                setPresent(false);
+                onNotify?.('Attendance', `${student.name} marked Absent for today`, 'warning');
+              }}
+              className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all active:scale-95 ${
                 !present
                   ? 'bg-rose-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -251,10 +308,20 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
           <div className="mt-4 flex justify-center space-x-3">
             <button
               onClick={handleSaveAndNext}
-              className="px-5 py-2 rounded-lg bg-slate-900 text-white font-semibold text-xs shadow-sm hover:bg-slate-800 flex items-center space-x-2"
+              disabled={isSaving}
+              className="px-5 py-2 rounded-lg bg-slate-900 text-white font-semibold text-xs shadow-sm hover:bg-slate-800 flex items-center space-x-2 active:scale-95 disabled:opacity-50"
             >
-              <span>Save & Next Child</span>
-              <ChevronRight className="w-4 h-4" />
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Saving Absent Record...</span>
+                </>
+              ) : (
+                <>
+                  <span>Save & Next Child</span>
+                  <ChevronRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -565,8 +632,11 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
           <div className="flex items-center space-x-1.5">
             <button
               type="button"
-              onClick={() => shareViaWhatsApp(student, currentObservationData, schoolName)}
-              className="px-2.5 sm:px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center space-x-1.5 transition-colors"
+              onClick={() => {
+                onNotify?.('WhatsApp', `Opening WhatsApp report for ${student.name}...`, 'info');
+                shareViaWhatsApp(student, currentObservationData, schoolName);
+              }}
+              className="px-2.5 sm:px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center space-x-1.5 transition-all active:scale-95"
               title="Share to Parent WhatsApp"
             >
               <Share2 className="w-3.5 h-3.5" />
@@ -575,8 +645,11 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
 
             <button
               type="button"
-              onClick={() => generateDailyObservationPDF(student, currentObservationData, schoolName, student.classroomName)}
-              className="px-2.5 sm:px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold shadow-xs flex items-center space-x-1.5 transition-colors"
+              onClick={() => {
+                onNotify?.('PDF Slip', `Downloading observation slip for ${student.name}...`, 'info');
+                generateDailyObservationPDF(student, currentObservationData, schoolName, student.classroomName);
+              }}
+              className="px-2.5 sm:px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold shadow-xs flex items-center space-x-1.5 transition-all active:scale-95"
               title="Download PDF Observation Slip"
             >
               <FileDown className="w-3.5 h-3.5" />
@@ -586,31 +659,52 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
 
           {/* Primary Save & Next Child Button */}
           <div className="flex items-center space-x-2">
-            {savedNotice && (
-              <span className="text-xs font-semibold text-emerald-600 flex items-center space-x-1">
-                <Check className="w-3.5 h-3.5" />
-                <span>Saved!</span>
-              </span>
-            )}
-
             <button
               type="button"
               onClick={handleSaveOnly}
               disabled={isSaving}
-              className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors border border-slate-300"
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border flex items-center space-x-1.5 active:scale-95 ${
+                savedNotice
+                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+              } disabled:opacity-60 disabled:cursor-not-allowed`}
+              title="Save current observation"
             >
-              <Save className="w-3.5 h-3.5 sm:hidden" />
-              <span className="hidden sm:inline">Save</span>
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-600" />
+                  <span className="hidden sm:inline">Saving...</span>
+                </>
+              ) : savedNotice ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                  <span>Saved!</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Save</span>
+                </>
+              )}
             </button>
 
             <button
               type="button"
               onClick={handleSaveAndNext}
               disabled={isSaving}
-              className="px-4 sm:px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm flex items-center space-x-1.5 transition-colors"
+              className="px-4 sm:px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold shadow-sm flex items-center space-x-1.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <span>{hasNext ? 'Save & Next' : 'Save Record'}</span>
-              <ChevronRight className="w-4 h-4" />
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <span>{hasNext ? 'Save & Next' : 'Save Record'}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </div>
         </div>

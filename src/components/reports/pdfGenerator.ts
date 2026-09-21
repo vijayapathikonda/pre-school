@@ -5,8 +5,8 @@ import { DailyObservation, Student } from '../../types/observation';
 export function generateDailyObservationPDF(
   student: Student,
   observation: DailyObservation,
-  schoolName: string = 'Sunshine Preschool',
-  classroomName: string = 'Sunflowers (Pre-K)'
+  schoolName: string = 'Pragathi Vidyalaya School',
+  classroomName: string = 'Nursery Jnana'
 ) {
   const doc = new jsPDF({
     orientation: 'portrait',

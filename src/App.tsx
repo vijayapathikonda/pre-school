@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Classroom, Student, DailyObservation } from './types/observation';
-import { db, initializeDatabase, saveObservation } from './db/schema';
+import { db, initializeDatabase, saveObservation, syncUnsyncedObservations } from './db/schema';
+import { 
+  fetchCloudObservations, 
+  fetchCloudRoster, 
+  subscribeToCloudObservations 
+} from './db/supabaseClient';
 import { Header } from './components/layout/Header';
 import { Navigation, TabType } from './components/layout/Navigation';
 import { StudentRosterBar } from './components/observation/StudentRosterBar';
@@ -10,6 +15,7 @@ import { StudentList } from './components/roster/StudentList';
 import { ReportsView } from './components/reports/ReportsView';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { LoginPage, AuthUser } from './components/auth/LoginPage';
+import { Toast, ToastMessage } from './components/common/Toast';
 
 export const App: React.FC = () => {
   const [ready, setReady] = useState(false);
@@ -36,6 +42,21 @@ export const App: React.FC = () => {
   const [observations, setObservations] = useState<DailyObservation[]>([]);
   const [schoolName, setSchoolName] = useState<string>('Pragathi Vidyalaya School');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  const showToast = useCallback(
+    (title: string, message: string, type: 'success' | 'info' | 'warning' | 'error' = 'success') => {
+      setToast({
+        id: Date.now().toString(),
+        title,
+        message,
+        type,
+      });
+    },
+    []
+  );
 
   // Initialize DB and load data
   const loadData = useCallback(async () => {
@@ -60,6 +81,28 @@ export const App: React.FC = () => {
     }
 
     setReady(true);
+
+    // In background, pull master roster from cloud if connected
+    fetchCloudRoster()
+      .then(async (cloudRoster) => {
+        if (cloudRoster && cloudRoster.students.length > 0) {
+          await db.classrooms.clear();
+          await db.classrooms.bulkPut(cloudRoster.classrooms);
+
+          const cloudStudentIds = new Set(cloudRoster.students.map((s) => s.id));
+          const localStudents = await db.students.toArray();
+          for (const ls of localStudents) {
+            if (!cloudStudentIds.has(ls.id)) {
+              await db.students.delete(ls.id);
+            }
+          }
+          await db.students.bulkPut(cloudRoster.students);
+
+          setClassrooms(cloudRoster.classrooms);
+          setStudents(cloudRoster.students);
+        }
+      })
+      .catch((err) => console.warn('Background roster sync notice:', err));
   }, []);
 
   useEffect(() => {
@@ -69,13 +112,59 @@ export const App: React.FC = () => {
   // Load observations whenever date changes
   const loadDateObservations = useCallback(async () => {
     if (!ready) return;
-    const records = await db.observations.where('date').equals(selectedDate).toArray();
-    setObservations(records);
+
+    // 1. Immediately read local records for 0ms latency UI display
+    const localRecords = await db.observations.where('date').equals(selectedDate).toArray();
+    setObservations(localRecords);
+
+    // 2. Fetch remote records from Supabase cloud
+    try {
+      const cloudRecords = await fetchCloudObservations(selectedDate);
+      if (cloudRecords && cloudRecords.length > 0) {
+        for (const cloudObs of cloudRecords) {
+          await db.observations.put(cloudObs);
+        }
+        const updatedRecords = await db.observations.where('date').equals(selectedDate).toArray();
+        setObservations(updatedRecords);
+      }
+
+      // 3. Push any offline records created on this device
+      syncUnsyncedObservations().catch((err) => console.warn('Offline sync notice:', err));
+    } catch (err) {
+      console.warn('Could not pull cloud observations:', err);
+    }
   }, [ready, selectedDate]);
 
   useEffect(() => {
     loadDateObservations();
   }, [loadDateObservations]);
+
+  // Subscribe to real-time changes on daily_observations for active date
+  useEffect(() => {
+    if (!ready) return;
+
+    const unsubscribe = subscribeToCloudObservations(selectedDate, (cloudObs) => {
+      // Save directly to Dexie
+      db.observations.put(cloudObs).catch((e) => console.warn('Dexie save error:', e));
+
+      // Update active observations state
+      setObservations((prev) => {
+        const index = prev.findIndex(
+          (o) => o.studentId === cloudObs.studentId && o.date === cloudObs.date
+        );
+        if (index >= 0) {
+          const updated = [...prev];
+          updated[index] = cloudObs;
+          return updated;
+        }
+        return [...prev, cloudObs];
+      });
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [ready, selectedDate]);
 
   // Filter students based on classroom selection
   const classroomStudents = useMemo(() => {
@@ -144,6 +233,57 @@ export const App: React.FC = () => {
     await loadDateObservations();
   };
 
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    showToast('Syncing Cloud...', 'Connecting to Supabase Cloud Database...', 'info');
+    try {
+      // 1. Push any offline records created on this phone
+      await syncUnsyncedObservations();
+
+      // 2. Fetch latest master roster from cloud
+      const cloudRoster = await fetchCloudRoster();
+      if (cloudRoster && cloudRoster.students.length > 0) {
+        await db.classrooms.clear();
+        await db.classrooms.bulkPut(cloudRoster.classrooms);
+
+        const cloudStudentIds = new Set(cloudRoster.students.map((s) => s.id));
+        const localStudents = await db.students.toArray();
+        for (const ls of localStudents) {
+          if (!cloudStudentIds.has(ls.id)) {
+            await db.students.delete(ls.id);
+          }
+        }
+        await db.students.bulkPut(cloudRoster.students);
+
+        setClassrooms(cloudRoster.classrooms);
+        setStudents(cloudRoster.students);
+      }
+
+      // 3. Fetch observations for currently selected date
+      const cloudRecords = await fetchCloudObservations(selectedDate);
+      if (cloudRecords && cloudRecords.length > 0) {
+        for (const obs of cloudRecords) {
+          await db.observations.put(obs);
+        }
+      }
+      const updatedRecords = await db.observations.where('date').equals(selectedDate).toArray();
+      setObservations(updatedRecords);
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setLastSyncTime(timeStr);
+      showToast(
+        'Cloud Synced!',
+        `Refreshed ${cloudRecords.length} observation records from Supabase Cloud.`,
+        'success'
+      );
+    } catch (err: any) {
+      console.warn('Manual sync warning:', err);
+      showToast('Sync Notice', err?.message || 'Could not complete cloud sync.', 'warning');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleClassroomChange = async (id: string) => {
     setSelectedClassroomId(id);
     await db.settings.put({ key: 'activeClassroomId', value: id });
@@ -152,11 +292,13 @@ export const App: React.FC = () => {
   const handleUpdateSchoolName = async (name: string) => {
     setSchoolName(name);
     await db.settings.put({ key: 'schoolName', value: name });
+    showToast('School Name Updated', `Updated to "${name}"`, 'success');
   };
 
   const handleLogout = () => {
     localStorage.removeItem('pragathi_auth_user');
     setCurrentUser(null);
+    showToast('Logged Out', 'You have been safely logged out.', 'info');
   };
 
   // If user is not logged in, show mandatory LoginPage first!
@@ -200,6 +342,9 @@ export const App: React.FC = () => {
         totalStudents={students.length}
         currentUser={currentUser}
         onLogout={handleLogout}
+        isSyncing={isSyncing}
+        onManualSync={handleManualSync}
+        lastSyncTime={lastSyncTime}
       />
 
       {/* Main View Area */}
@@ -226,6 +371,7 @@ export const App: React.FC = () => {
                 hasNext={hasNext}
                 hasPrev={hasPrev}
                 schoolName={schoolName}
+                onNotify={showToast}
               />
             ) : (
               <div className="p-12 text-center text-slate-400 text-sm">
@@ -283,6 +429,9 @@ export const App: React.FC = () => {
         onUpdateSchoolName={handleUpdateSchoolName}
         onDataImported={loadData}
       />
+
+      {/* Global Toast Notification Prompt */}
+      <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   );
 };

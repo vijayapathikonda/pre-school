@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import { Student, DailyObservation, Classroom } from '../types/observation';
 import { REAL_CLASSROOMS, REAL_STUDENTS } from './sampleData';
-import { syncObservationToCloud, syncRosterToCloud } from './supabaseClient';
+import { syncObservationToCloud, syncRosterToCloud, fetchCloudRoster } from './supabaseClient';
 
 export interface AppSetting {
   key: string;
@@ -37,6 +37,23 @@ export async function initializeDatabase(): Promise<void> {
   if (!schoolMigrated) {
     await db.students.clear();
     await db.classrooms.clear();
+
+    // Check if cloud already has the master roster
+    try {
+      const cloudRoster = await fetchCloudRoster();
+      if (cloudRoster && cloudRoster.students.length > 0) {
+        await db.classrooms.bulkPut(cloudRoster.classrooms);
+        await db.students.bulkPut(cloudRoster.students);
+        await db.settings.put({ key: 'schoolName', value: SCHOOL_NAME });
+        await db.settings.put({ key: 'activeClassroomId', value: cloudRoster.classrooms[0]?.id || REAL_CLASSROOMS[0].id });
+        await db.settings.put({ key: 'adminPin', value: '1234' });
+        await db.settings.put({ key: 'pragathi_migrated_v1', value: true });
+        return;
+      }
+    } catch (err) {
+      console.warn('Could not fetch initial cloud roster:', err);
+    }
+
     await db.classrooms.bulkAdd(REAL_CLASSROOMS);
     await db.students.bulkAdd(REAL_STUDENTS);
 
@@ -50,6 +67,13 @@ export async function initializeDatabase(): Promise<void> {
       console.warn('Initial cloud sync pending:', err)
     );
     return;
+  }
+
+  // Explicitly purge legacy demo classrooms if they exist in Dexie
+  const legacyClassIds = ['c1', 'c2', 'c3', 'c4', 'c5'];
+  for (const cid of legacyClassIds) {
+    await db.classrooms.delete(cid);
+    await db.students.where('classroomId').equals(cid).delete();
   }
 
   const classroomCount = await db.classrooms.count();
@@ -183,3 +207,26 @@ export async function saveObservation(observation: DailyObservation): Promise<{ 
 
   return { id, synced };
 }
+
+// Synchronize all pending offline observations with Supabase
+export async function syncUnsyncedObservations(): Promise<number> {
+  try {
+    const unsynced = await db.observations.filter(o => o.synced === false || o.synced === undefined).toArray();
+    if (unsynced.length === 0) return 0;
+
+    let syncedCount = 0;
+    for (const obs of unsynced) {
+      const student = await db.students.get(obs.studentId);
+      const success = await syncObservationToCloud(obs, student);
+      if (success && obs.id) {
+        await db.observations.update(obs.id, { synced: true });
+        syncedCount++;
+      }
+    }
+    return syncedCount;
+  } catch (err) {
+    console.warn('Error syncing pending offline observations:', err);
+    return 0;
+  }
+}
+
