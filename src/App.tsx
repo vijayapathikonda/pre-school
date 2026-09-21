@@ -386,11 +386,13 @@ export const App: React.FC = () => {
             students={classroomStudents}
             observationsMap={observationsMap}
             selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
             onSelectStudent={(id) => {
               setActiveStudentId(id);
               setCurrentTab('observation');
             }}
             schoolName={schoolName}
+            onNotify={showToast}
           />
         )}
 
@@ -409,6 +411,7 @@ export const App: React.FC = () => {
             students={classroomStudents}
             classrooms={classrooms}
             schoolName={schoolName}
+            onNotify={showToast}
           />
         )}
       </main>

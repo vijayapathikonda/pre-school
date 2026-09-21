@@ -11,11 +11,13 @@ interface ReportsViewProps {
   students: Student[];
   classrooms?: Classroom[];
   schoolName: string;
+  onNotify?: (title: string, message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({
   students,
   schoolName,
+  onNotify,
 }) => {
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || '');
   const [studentHistory, setStudentHistory] = useState<DailyObservation[]>([]);
@@ -61,8 +63,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   }, [selectedStudentId]);
 
   const handleExportAllCSV = async () => {
-    const csv = await exportObservationsToCSV();
-    downloadFile(csv, `Preschool_Full_Observation_Archive_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+    try {
+      onNotify?.('Exporting History', 'Generating full observation archive CSV...', 'info');
+      const csv = await exportObservationsToCSV();
+      downloadFile(csv, `Preschool_Full_Observation_Archive_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv;charset=utf-8;');
+      onNotify?.('Export Complete!', 'Downloaded complete historical observation archive CSV.', 'success');
+    } catch (err: any) {
+      onNotify?.('Export Error', err?.message || 'Could not export CSV archive.', 'error');
+    }
   };
 
   return (
@@ -157,16 +165,22 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                     {/* Actions */}
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => shareViaWhatsApp(selectedStudent, obs, schoolName)}
-                        className="px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center space-x-1 border border-emerald-200 transition-colors"
+                        onClick={() => {
+                          onNotify?.('WhatsApp', `Opening WhatsApp slip for ${selectedStudent.name}...`, 'info');
+                          shareViaWhatsApp(selectedStudent, obs, schoolName);
+                        }}
+                        className="px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-700 text-xs font-bold flex items-center space-x-1 border border-emerald-200 transition-all"
                       >
                         <Share2 className="w-3.5 h-3.5" />
                         <span className="hidden sm:inline">WhatsApp</span>
                       </button>
 
                       <button
-                        onClick={() => generateDailyObservationPDF(selectedStudent, obs, schoolName, selectedStudent.classroomName)}
-                        className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center space-x-1 border border-slate-200 transition-colors"
+                        onClick={() => {
+                          onNotify?.('PDF Slip', `Downloading observation slip for ${selectedStudent.name} (${obs.date})...`, 'info');
+                          generateDailyObservationPDF(selectedStudent, obs, schoolName, selectedStudent.classroomName);
+                        }}
+                        className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-bold flex items-center space-x-1 border border-slate-200 transition-all"
                       >
                         <Download className="w-3.5 h-3.5 text-slate-600" />
                         <span className="hidden sm:inline">PDF Slip</span>

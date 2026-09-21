@@ -1,6 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Student, DailyObservation } from '../../types/observation';
-import { Check, UserX, Clock, Download, FileSpreadsheet, Share2, Search, ArrowRight } from 'lucide-react';
+import {
+  Check,
+  UserX,
+  Clock,
+  Download,
+  FileSpreadsheet,
+  Share2,
+  Search,
+  ArrowRight,
+  Calendar,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 import { exportObservationsToCSV, downloadFile } from '../../db/exportImport';
 import { generateDailyObservationPDF } from '../reports/pdfGenerator';
 import { shareViaWhatsApp } from '../../utils/whatsappShare';
@@ -9,19 +21,53 @@ interface DailySummaryListProps {
   students: Student[];
   observationsMap: Map<string, DailyObservation>;
   selectedDate: string;
+  onDateChange: (date: string) => void;
   onSelectStudent: (studentId: string) => void;
   schoolName: string;
+  onNotify?: (title: string, message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
 export const DailySummaryList: React.FC<DailySummaryListProps> = ({
   students,
   observationsMap,
   selectedDate,
+  onDateChange,
   onSelectStudent,
   schoolName,
+  onNotify,
 }) => {
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending' | 'absent'>('all');
   const [search, setSearch] = useState('');
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = selectedDate === todayStr;
+
+  const handlePrevDay = () => {
+    const current = new Date(selectedDate);
+    current.setDate(current.getDate() - 1);
+    onDateChange(current.toISOString().split('T')[0]);
+  };
+
+  const handleNextDay = () => {
+    const current = new Date(selectedDate);
+    current.setDate(current.getDate() + 1);
+    onDateChange(current.toISOString().split('T')[0]);
+  };
+
+  const formattedDate = useMemo(() => {
+    try {
+      const [y, m, d] = selectedDate.split('-').map(Number);
+      const dateObj = new Date(y, m - 1, d);
+      return dateObj.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch {
+      return selectedDate;
+    }
+  }, [selectedDate]);
 
   const completedStudents = students.filter((s) => {
     const obs = observationsMap.get(s.id);
@@ -50,12 +96,79 @@ export const DailySummaryList: React.FC<DailySummaryListProps> = ({
   });
 
   const handleExportCSV = async () => {
-    const csvData = await exportObservationsToCSV(selectedDate);
-    downloadFile(csvData, `Observations_${selectedDate}.csv`, 'text/csv;charset=utf-8;');
+    try {
+      onNotify?.('Exporting CSV', `Generating daily summary report for ${selectedDate}...`, 'info');
+      const csvData = await exportObservationsToCSV(selectedDate);
+      downloadFile(csvData, `Observations_${selectedDate}.csv`, 'text/csv;charset=utf-8;');
+      onNotify?.('Export Complete!', `Downloaded Observations_${selectedDate}.csv successfully.`, 'success');
+    } catch (err: any) {
+      onNotify?.('Export Error', err?.message || 'Could not export CSV.', 'error');
+    }
   };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-4 pb-24">
+      {/* Calendar Date Selector Card */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <div className="flex items-center space-x-2">
+              <Calendar className="w-5 h-5 text-indigo-600" />
+              <h2 className="text-sm font-bold text-slate-900">Daily Observation Summary</h2>
+              {isToday ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  Today
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
+                  Past Date
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
+              Showing records for <span className="font-bold text-indigo-950">{formattedDate}</span>
+            </p>
+          </div>
+
+          {/* Calendar Picker & Controls */}
+          <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+            <button
+              onClick={handlePrevDay}
+              className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors"
+              title="Previous Day"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center space-x-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-300 shadow-2xs">
+              <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => onDateChange(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer"
+              />
+            </div>
+
+            <button
+              onClick={handleNextDay}
+              className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors"
+              title="Next Day"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            {!isToday && (
+              <button
+                onClick={() => onDateChange(todayStr)}
+                className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition-colors"
+              >
+                Today
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
       {/* Overview Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <div
