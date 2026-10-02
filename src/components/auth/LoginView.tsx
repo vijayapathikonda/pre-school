@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { loginWithGoogle } from '../../auth/firebase';
-import { AlertCircle, ShieldCheck, School, Users } from 'lucide-react';
+import { AlertCircle, ShieldCheck, Users } from 'lucide-react';
+import { SchoolLogo } from '../common/SchoolLogo';
 
 interface LoginViewProps {
   onLoginSuccess: () => void;
@@ -33,8 +34,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex p-3 bg-indigo-50 text-indigo-600 rounded-2xl mb-1 shadow-sm">
-            <School className="w-10 h-10" />
+          <div className="flex justify-center mb-1">
+            <SchoolLogo size="lg" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
             Pragathi Vidyalaya

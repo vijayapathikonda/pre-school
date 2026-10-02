@@ -15,6 +15,7 @@ import { StudentList } from './components/roster/StudentList';
 import { ReportsView } from './components/reports/ReportsView';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { LoginPage, AuthUser } from './components/auth/LoginPage';
+import { SchoolLogo } from './components/common/SchoolLogo';
 import { Toast, ToastMessage } from './components/common/Toast';
 
 export const App: React.FC = () => {
@@ -343,9 +344,10 @@ export const App: React.FC = () => {
 
   if (!ready) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white p-4">
+        <div className="text-center space-y-4 flex flex-col items-center">
+          <SchoolLogo size="lg" />
+          <div className="w-8 h-8 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
           <p className="text-xs font-semibold text-slate-300">Loading Pragathi Vidyalaya Portal...</p>
         </div>
       </div>
