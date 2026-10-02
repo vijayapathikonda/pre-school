@@ -115,10 +115,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           <p className="text-[11px] text-gray-500">
             Need access? Contact Admin at{' '}
             <a
-              href="mailto:kavyay294@gmail.com"
+              href="mailto:vijaya.pathikonda@gmail.com"
               className="text-indigo-600 hover:underline font-medium"
             >
-              kavyay294@gmail.com
+              vijaya.pathikonda@gmail.com
             </a>
           </p>
         </div>

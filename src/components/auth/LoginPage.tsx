@@ -151,10 +151,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <p className="text-[11px] text-slate-500">
             For login issues or new teacher onboarding, contact{' '}
             <a
-              href="mailto:kavyay294@gmail.com"
+              href="mailto:vijaya.pathikonda@gmail.com"
               className="text-indigo-400 hover:text-indigo-300 font-medium"
             >
-              kavyay294@gmail.com
+              vijaya.pathikonda@gmail.com
             </a>
           </p>
         </div>
