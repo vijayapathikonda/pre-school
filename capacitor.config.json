@@ -1,8 +1,15 @@
 {
   "appId": "com.preschool.childobs",
-  "appName": "ChildObs",
+  "appName": "Pragathi Vidyalaya",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"
+  },
+  "plugins": {
+    "GoogleAuth": {
+      "scopes": ["profile", "email"],
+      "serverClientId": "862077392244-65gpbqt97e1kc4arc75h8q3pg2bkkn6c.apps.googleusercontent.com",
+      "forceCodeForRefreshToken": true
+    }
   }
 }

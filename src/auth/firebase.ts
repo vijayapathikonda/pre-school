@@ -3,13 +3,18 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithCredential,
   signOut as fbSignOut,
   User,
 } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { getTeacherProfile, TeacherProfile } from './teacherWhitelist';
 import { fetchTeacherProfileFromTurso } from '../db/tursoClient';
 
 const env = (import.meta as any).env || {};
+
+export const GOOGLE_CLIENT_ID = "862077392244-65gpbqt97e1kc4arc75h8q3pg2bkkn6c.apps.googleusercontent.com";
 
 const firebaseConfig = {
   apiKey: env.VITE_FIREBASE_API_KEY || "AIzaSyBFtsqhCq4Cy4ZnAFFUSkJ9X8RWttxUv64",
@@ -25,6 +30,19 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
+// Initialize GoogleAuth on native platforms
+if (Capacitor.isNativePlatform()) {
+  try {
+    GoogleAuth.initialize({
+      clientId: GOOGLE_CLIENT_ID,
+      scopes: ['profile', 'email'],
+      grantOfflineAccess: true,
+    });
+  } catch (err) {
+    console.warn('Native GoogleAuth.initialize error:', err);
+  }
+}
+
 export interface AuthState {
   user: User | null;
   teacher: TeacherProfile | null;
@@ -33,8 +51,24 @@ export interface AuthState {
 }
 
 export async function loginWithGoogle(): Promise<{ user: User; teacher: TeacherProfile }> {
-  const result = await signInWithPopup(auth, googleProvider);
-  const user = result.user;
+  let user: User;
+
+  if (Capacitor.isNativePlatform()) {
+    // 1. Native Android Google Sign-In using Google Play Services bottom sheet
+    // Bypasses sessionStorage/WebView issues completely
+    const googleUser = await GoogleAuth.signIn();
+    const idToken = googleUser?.authentication?.idToken;
+    if (!idToken) {
+      throw new Error('Failed to retrieve Google ID token from device.');
+    }
+    const credential = GoogleAuthProvider.credential(idToken);
+    const result = await signInWithCredential(auth, credential);
+    user = result.user;
+  } else {
+    // 2. Standard Web Sign-In using Browser Popup
+    const result = await signInWithPopup(auth, googleProvider);
+    user = result.user;
+  }
 
   // 1. Dynamic Turso cloud database lookup (enables zero-code teacher onboarding)
   let teacher: TeacherProfile | null = null;
@@ -50,7 +84,7 @@ export async function loginWithGoogle(): Promise<{ user: User; teacher: TeacherP
   }
 
   if (!teacher) {
-    await fbSignOut(auth);
+    await logoutUser();
     throw new Error(
       `Access Denied: The account "${user.email}" is not registered in the Pragathi Vidyalaya teacher list. Please contact the administrator.`
     );
@@ -60,5 +94,12 @@ export async function loginWithGoogle(): Promise<{ user: User; teacher: TeacherP
 }
 
 export async function logoutUser(): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await GoogleAuth.signOut();
+    } catch (e) {
+      console.warn('Native GoogleAuth.signOut error:', e);
+    }
+  }
   await fbSignOut(auth);
 }

@@ -1,7 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ChildObs</string>
-    <string name="title_activity_main">ChildObs</string>
+    <string name="app_name">Pragathi Vidyalaya</string>
+    <string name="title_activity_main">Pragathi Vidyalaya</string>
     <string name="package_name">com.preschool.childobs</string>
     <string name="custom_url_scheme">com.preschool.childobs</string>
+    <string name="server_client_id">862077392244-65gpbqt97e1kc4arc75h8q3pg2bkkn6c.apps.googleusercontent.com</string>
 </resources>
