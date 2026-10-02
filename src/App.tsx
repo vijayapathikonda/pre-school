@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Classroom, Student, DailyObservation } from './types/observation';
+import { Classroom, Student, DailyObservation, TeacherDelegation } from './types/observation';
 import { db, initializeDatabase, saveObservation, syncUnsyncedObservations } from './db/schema';
 import { 
   fetchCloudObservations, 
   fetchCloudRoster, 
-  subscribeToCloudObservations 
+  subscribeToCloudObservations,
+  fetchDelegationsForDate,
 } from './db/tursoClient';
 import { Header } from './components/layout/Header';
 import { Navigation, TabType } from './components/layout/Navigation';
@@ -17,6 +18,7 @@ import { SettingsModal } from './components/settings/SettingsModal';
 import { LoginPage, AuthUser } from './components/auth/LoginPage';
 import { SchoolLogo } from './components/common/SchoolLogo';
 import { Toast, ToastMessage } from './components/common/Toast';
+import { CalendarCheck } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [ready, setReady] = useState(false);
@@ -41,6 +43,8 @@ export const App: React.FC = () => {
   const [selectedClassroomId, setSelectedClassroomId] = useState<string>('c_jnana');
   const [activeStudentId, setActiveStudentId] = useState<string>('');
   const [observations, setObservations] = useState<DailyObservation[]>([]);
+  const [delegations, setDelegations] = useState<TeacherDelegation[]>([]);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'cloud' | 'staff' | 'substitutes'>('cloud');
   const [schoolName, setSchoolName] = useState<string>('Pragathi Vidyalaya School');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -140,6 +144,20 @@ export const App: React.FC = () => {
     loadDateObservations();
   }, [loadDateObservations]);
 
+  // Fetch active teacher delegations for selectedDate
+  const loadDelegations = useCallback(async () => {
+    try {
+      const dels = await fetchDelegationsForDate(selectedDate);
+      setDelegations(dels);
+    } catch (err) {
+      console.warn('Could not pull delegations for date:', err);
+    }
+  }, [selectedDate]);
+
+  useEffect(() => {
+    loadDelegations();
+  }, [loadDelegations]);
+
   // Subscribe to real-time changes on daily_observations for active date
   useEffect(() => {
     if (!ready) return;
@@ -167,31 +185,58 @@ export const App: React.FC = () => {
     };
   }, [ready, selectedDate]);
 
-  // Enforce classroom scoping on user login or switch
+  // Effective assigned classes: permanent assignedClasses + temporary daily delegations
+  const effectiveAssignedClasses = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'admin' || currentUser.assignedClasses?.includes('*')) {
+      return ['*'];
+    }
+    const permanent = currentUser.assignedClasses || [];
+    const delegated = delegations
+      .filter(
+        (d) =>
+          d.date === selectedDate &&
+          d.substitute_teacher_email.toLowerCase() === currentUser.email?.toLowerCase()
+      )
+      .map((d) => d.classroom_id);
+    return Array.from(new Set([...permanent, ...delegated]));
+  }, [currentUser, delegations, selectedDate]);
+
+  // Enforce classroom scoping on user login or switch (including substitute delegations!)
   useEffect(() => {
-    if (currentUser?.role === 'teacher' && currentUser.assignedClasses && !currentUser.assignedClasses.includes('*')) {
-      const allowedClass = currentUser.defaultClassId || currentUser.assignedClasses[0];
-      if (selectedClassroomId !== allowedClass && !currentUser.assignedClasses.includes(selectedClassroomId)) {
-        setSelectedClassroomId(allowedClass);
+    if (currentUser?.role === 'teacher' && !effectiveAssignedClasses.includes('*')) {
+      if (effectiveAssignedClasses.length > 0 && !effectiveAssignedClasses.includes(selectedClassroomId)) {
+        setSelectedClassroomId(effectiveAssignedClasses[0]);
       }
     }
-  }, [currentUser, selectedClassroomId]);
+  }, [currentUser, effectiveAssignedClasses, selectedClassroomId]);
 
   // Filter students based on classroom selection and user authorization scope
   const classroomStudents = useMemo(() => {
     // Admins can view 'ALL'
     if (selectedClassroomId === 'ALL' && currentUser?.role === 'admin') return students;
 
-    // Teachers are strictly restricted to their assigned classroom
-    if (currentUser?.role === 'teacher' && currentUser.assignedClasses && !currentUser.assignedClasses.includes('*')) {
-      const allowedId = currentUser.assignedClasses.includes(selectedClassroomId)
+    // Teachers are restricted to their assigned classroom or covered substitute classroom
+    if (currentUser?.role === 'teacher' && !effectiveAssignedClasses.includes('*')) {
+      const allowedId = effectiveAssignedClasses.includes(selectedClassroomId)
         ? selectedClassroomId
-        : currentUser.defaultClassId || currentUser.assignedClasses[0];
+        : effectiveAssignedClasses[0];
       return students.filter((s) => s.classroomId === allowedId);
     }
 
     return students.filter((s) => s.classroomId === selectedClassroomId);
-  }, [students, selectedClassroomId, currentUser]);
+  }, [students, selectedClassroomId, currentUser, effectiveAssignedClasses]);
+
+  // Check if current view is a substitute coverage mode
+  const activeSubstituteDelegation = useMemo(() => {
+    if (!currentUser || currentUser.role === 'admin') return null;
+    return delegations.find(
+      (d) =>
+        d.date === selectedDate &&
+        d.classroom_id === selectedClassroomId &&
+        d.substitute_teacher_email.toLowerCase() === currentUser.email?.toLowerCase()
+    );
+  }, [delegations, selectedDate, selectedClassroomId, currentUser]);
 
   // Ensure active student is valid when classroom changes
   useEffect(() => {
@@ -363,7 +408,14 @@ export const App: React.FC = () => {
         classrooms={classrooms}
         selectedClassroomId={selectedClassroomId}
         onClassroomChange={handleClassroomChange}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => {
+          setSettingsInitialTab('cloud');
+          setIsSettingsOpen(true);
+        }}
+        onOpenSubstitutes={() => {
+          setSettingsInitialTab('substitutes');
+          setIsSettingsOpen(true);
+        }}
         schoolName={schoolName}
         totalStudents={students.length}
         currentUser={currentUser}
@@ -371,12 +423,31 @@ export const App: React.FC = () => {
         isSyncing={isSyncing}
         onManualSync={handleManualSync}
         lastSyncTime={lastSyncTime}
+        activeDelegations={delegations}
+        effectiveAssignedClasses={effectiveAssignedClasses}
       />
 
       {/* Main View Area */}
       <main className="flex-1">
         {currentTab === 'observation' && (
           <div>
+            {/* Substitute Mode Banner */}
+            {activeSubstituteDelegation && (
+              <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-xs text-amber-900 shadow-2xs">
+                <div className="flex items-center space-x-2">
+                  <CalendarCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    <strong>Substitute Coverage Mode:</strong> You are covering{' '}
+                    <strong className="underline">{activeSubstituteDelegation.classroom_name}</strong> for{' '}
+                    <strong>{activeSubstituteDelegation.absent_teacher_name}</strong> today ({selectedDate}).
+                  </span>
+                </div>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 border border-amber-500 shrink-0">
+                  Substitute
+                </span>
+              </div>
+            )}
+
             {/* Student Carousel Bar */}
             <StudentRosterBar
               students={classroomStudents}
@@ -428,7 +499,7 @@ export const App: React.FC = () => {
             classrooms={
               currentUser.role === 'admin'
                 ? classrooms
-                : classrooms.filter((c) => currentUser.assignedClasses?.includes(c.id))
+                : classrooms.filter((c) => effectiveAssignedClasses.includes(c.id))
             }
             selectedClassroomId={selectedClassroomId}
             onRefreshRoster={loadData}
@@ -439,7 +510,11 @@ export const App: React.FC = () => {
         {currentTab === 'reports' && (
           <ReportsView
             students={classroomStudents}
-            classrooms={classrooms}
+            classrooms={
+              currentUser.role === 'admin'
+                ? classrooms
+                : classrooms.filter((c) => effectiveAssignedClasses.includes(c.id))
+            }
             schoolName={schoolName}
             onNotify={showToast}
           />
@@ -462,6 +537,10 @@ export const App: React.FC = () => {
         onUpdateSchoolName={handleUpdateSchoolName}
         onDataImported={loadData}
         classrooms={classrooms}
+        selectedDate={selectedDate}
+        initialTab={settingsInitialTab}
+        currentUserName={currentUser.username}
+        onDelegationsUpdated={loadDelegations}
       />
 
       {/* Global Toast Notification Prompt */}

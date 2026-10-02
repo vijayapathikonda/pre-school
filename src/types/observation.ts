@@ -5,6 +5,21 @@ export interface Classroom {
   teacherName?: string;
 }
 
+export interface TeacherDelegation {
+  id: string;
+  date: string; // YYYY-MM-DD
+  classroom_id: string;
+  classroom_name: string;
+  absent_teacher_name: string;
+  absent_teacher_email?: string;
+  substitute_teacher_id: string;
+  substitute_teacher_name: string;
+  substitute_teacher_email: string;
+  assigned_by: string;
+  notes?: string;
+  created_at?: string;
+}
+
 export interface Student {
   id: string;
   name: string;

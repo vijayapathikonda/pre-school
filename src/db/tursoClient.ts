@@ -1,5 +1,5 @@
 import { createClient, Client } from '@libsql/client/web';
-import { DailyObservation, Student, Classroom } from '../types/observation';
+import { DailyObservation, Student, Classroom, TeacherDelegation } from '../types/observation';
 import { TeacherProfile } from '../auth/teacherWhitelist';
 
 let tursoInstance: Client | null = null;
@@ -453,4 +453,88 @@ export async function fetchTeacherProfileFromTurso(
     return null;
   }
 }
+
+// -------------------------------------------------------------
+// Daily Teacher Delegations / Substitutions ("Today's Substitute")
+// -------------------------------------------------------------
+
+export async function fetchDelegationsForDate(date: string): Promise<TeacherDelegation[]> {
+  const turso = getTurso();
+  if (!turso) return [];
+
+  try {
+    const res = await turso.execute({
+      sql: 'SELECT * FROM teacher_delegations WHERE date = ? ORDER BY created_at DESC',
+      args: [date],
+    });
+
+    return res.rows.map((r: any) => ({
+      id: String(r.id),
+      date: String(r.date),
+      classroom_id: String(r.classroom_id),
+      classroom_name: String(r.classroom_name),
+      absent_teacher_name: String(r.absent_teacher_name),
+      absent_teacher_email: r.absent_teacher_email ? String(r.absent_teacher_email) : undefined,
+      substitute_teacher_id: String(r.substitute_teacher_id),
+      substitute_teacher_name: String(r.substitute_teacher_name),
+      substitute_teacher_email: String(r.substitute_teacher_email),
+      assigned_by: String(r.assigned_by),
+      notes: r.notes ? String(r.notes) : undefined,
+      created_at: r.created_at ? String(r.created_at) : undefined,
+    }));
+  } catch (err) {
+    console.error('Failed to fetch delegations for date:', err);
+    return [];
+  }
+}
+
+export async function saveTeacherDelegation(
+  delegation: TeacherDelegation
+): Promise<{ success: boolean; error?: string }> {
+  const turso = getTurso();
+  if (!turso) return { success: false, error: 'Database client not connected.' };
+
+  try {
+    const delegationId = delegation.id || `del_${Date.now()}`;
+    await turso.execute({
+      sql: `INSERT OR REPLACE INTO teacher_delegations 
+            (id, date, classroom_id, classroom_name, absent_teacher_name, absent_teacher_email, substitute_teacher_id, substitute_teacher_name, substitute_teacher_email, assigned_by, notes) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        delegationId,
+        delegation.date,
+        delegation.classroom_id,
+        delegation.classroom_name,
+        delegation.absent_teacher_name,
+        delegation.absent_teacher_email || null,
+        delegation.substitute_teacher_id,
+        delegation.substitute_teacher_name,
+        delegation.substitute_teacher_email.toLowerCase(),
+        delegation.assigned_by,
+        delegation.notes || null,
+      ],
+    });
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to save teacher delegation:', err);
+    return { success: false, error: err.message || 'Failed to save delegation.' };
+  }
+}
+
+export async function deleteTeacherDelegation(id: string): Promise<{ success: boolean; error?: string }> {
+  const turso = getTurso();
+  if (!turso) return { success: false, error: 'Database client not connected.' };
+
+  try {
+    await turso.execute({
+      sql: 'DELETE FROM teacher_delegations WHERE id = ?',
+      args: [id],
+    });
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to delete teacher delegation:', err);
+    return { success: false, error: err.message || 'Failed to delete delegation.' };
+  }
+}
+
 

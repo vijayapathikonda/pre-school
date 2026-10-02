@@ -14,6 +14,8 @@ import {
   AlertCircle,
   Search,
   Shield,
+  CalendarCheck,
+  UserCheck,
 } from 'lucide-react';
 import {
   getTursoCredentials,
@@ -24,11 +26,14 @@ import {
   fetchAllStaff,
   saveStaffToCloud,
   deleteStaffFromCloud,
+  fetchDelegationsForDate,
+  saveTeacherDelegation,
+  deleteTeacherDelegation,
   StaffRecord,
 } from '../../db/tursoClient';
 import { db } from '../../db/schema';
 import { exportAllDataAsJSON, importDataFromJSON, downloadFile } from '../../db/exportImport';
-import { Classroom } from '../../types/observation';
+import { Classroom, TeacherDelegation } from '../../types/observation';
 import { REAL_CLASSROOMS } from '../../db/sampleData';
 
 interface SettingsModalProps {
@@ -38,6 +43,10 @@ interface SettingsModalProps {
   onUpdateSchoolName: (name: string) => void;
   onDataImported: () => void;
   classrooms?: Classroom[];
+  selectedDate?: string;
+  initialTab?: 'cloud' | 'staff' | 'substitutes';
+  currentUserName?: string;
+  onDelegationsUpdated?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -47,9 +56,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateSchoolName,
   onDataImported,
   classrooms = [],
+  selectedDate,
+  initialTab = 'cloud',
+  currentUserName = 'Admin',
+  onDelegationsUpdated,
 }) => {
   const creds = getTursoCredentials();
-  const [activeTab, setActiveTab] = useState<'cloud' | 'staff'>('cloud');
+  const [activeTab, setActiveTab] = useState<'cloud' | 'staff' | 'substitutes'>(initialTab);
   const [tursoUrl, setTursoUrl] = useState(creds.url);
   const [tursoToken, setTursoToken] = useState(creds.token);
   const [currentSchoolName, setCurrentSchoolName] = useState(schoolName);
@@ -64,7 +77,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
 
-  // Form fields
+  // Form fields for Staff
   const [formName, setFormName] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formRole, setFormRole] = useState<'Teacher' | 'Admin'>('Teacher');
@@ -72,7 +85,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [staffMessage, setStaffMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  // Delegations / Substitutes State
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const [delegationDate, setDelegationDate] = useState(selectedDate || todayStr);
+  const [delegationsList, setDelegationsList] = useState<TeacherDelegation[]>([]);
+  const [delegationsLoading, setDelegationsLoading] = useState(false);
+  const [delAbsentClassId, setDelAbsentClassId] = useState('');
+  const [delSubStaffId, setDelSubStaffId] = useState('');
+  const [delNotes, setDelNotes] = useState('');
+  const [delSubmitting, setDelSubmitting] = useState(false);
+  const [delMessage, setDelMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
   const availableClassrooms = classrooms.length > 0 ? classrooms : REAL_CLASSROOMS;
+
+  // Sync tab with initialTab when opened
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
+
+  // Sync delegationDate with selectedDate when opened
+  useEffect(() => {
+    if (selectedDate) {
+      setDelegationDate(selectedDate);
+    }
+  }, [selectedDate]);
 
   const loadStaff = async () => {
     setStaffLoading(true);
@@ -86,11 +124,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const loadDelegations = async (date: string) => {
+    setDelegationsLoading(true);
+    try {
+      const records = await fetchDelegationsForDate(date);
+      setDelegationsList(records);
+    } catch (err) {
+      console.error('Failed to load delegations:', err);
+    } finally {
+      setDelegationsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       loadStaff();
+      loadDelegations(delegationDate);
     }
-  }, [isOpen]);
+  }, [isOpen, delegationDate]);
 
   // Filtered staff records (must be called unconditionally before early return)
   const filteredStaff = useMemo(() => {
@@ -105,6 +156,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     );
   }, [staffList, staffSearchQuery]);
 
+  // Early return if modal is not open
   if (!isOpen) return null;
 
   const handleTestConnection = async () => {
@@ -295,6 +347,78 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  // Delegation Handlers ("Today's Substitute")
+  const handleAssignSubstitute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!delAbsentClassId || !delSubStaffId) {
+      setDelMessage({
+        text: 'Please select both the absent class/teacher and the substitute teacher.',
+        type: 'error',
+      });
+      return;
+    }
+
+    const absentClass = availableClassrooms.find((c) => c.id === delAbsentClassId);
+    const subStaff = staffList.find((s) => s.id === delSubStaffId);
+
+    if (!absentClass || !subStaff) {
+      setDelMessage({ text: 'Invalid classroom or substitute teacher selection.', type: 'error' });
+      return;
+    }
+
+    setDelSubmitting(true);
+    setDelMessage(null);
+
+    const delegation: TeacherDelegation = {
+      id: `del_${delegationDate}_${absentClass.id}_${Date.now()}`,
+      date: delegationDate,
+      classroom_id: absentClass.id,
+      classroom_name: absentClass.name,
+      absent_teacher_name: absentClass.teacherName || 'Regular Teacher',
+      substitute_teacher_id: subStaff.id,
+      substitute_teacher_name: subStaff.name,
+      substitute_teacher_email: subStaff.email,
+      assigned_by: currentUserName || 'Admin',
+      notes: delNotes.trim() || undefined,
+    };
+
+    const res = await saveTeacherDelegation(delegation);
+    setDelSubmitting(false);
+
+    if (res.success) {
+      setDelMessage({
+        text: `🎉 ${subStaff.name} is now assigned to cover ${absentClass.name} on ${delegationDate}! She can now view and record observations for both classes.`,
+        type: 'success',
+      });
+      setDelAbsentClassId('');
+      setDelSubStaffId('');
+      setDelNotes('');
+      await loadDelegations(delegationDate);
+      onDelegationsUpdated?.();
+    } else {
+      setDelMessage({ text: `Failed to assign substitute: ${res.error}`, type: 'error' });
+    }
+  };
+
+  const handleCancelDelegation = async (del: TeacherDelegation) => {
+    if (
+      !confirm(
+        `Cancel substitute assignment for ${del.classroom_name} on ${del.date}? ${del.substitute_teacher_name} will revert back to her standard class.`
+      )
+    ) {
+      return;
+    }
+
+    const res = await deleteTeacherDelegation(del.id);
+    if (res.success) {
+      setDelMessage({ text: `Removed substitute delegation for ${del.classroom_name}.`, type: 'success' });
+      await loadDelegations(delegationDate);
+      onDelegationsUpdated?.();
+    } else {
+      setDelMessage({ text: `Failed to delete delegation: ${res.error}`, type: 'error' });
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden my-6">
@@ -316,34 +440,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Top Navigation Tabs */}
-        <div className="flex border-b border-slate-200 bg-slate-50 px-5 pt-2">
+        <div className="flex border-b border-slate-200 bg-slate-50 px-5 pt-2 gap-1 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab('cloud')}
-            className={`flex items-center space-x-2 py-2.5 px-4 text-xs font-bold border-b-2 transition-all ${
+            className={`flex items-center space-x-2 py-2.5 px-3.5 text-xs font-bold border-b-2 shrink-0 transition-all ${
               activeTab === 'cloud'
                 ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg shadow-2xs'
                 : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
             <Cloud className="w-4 h-4" />
-            <span>Cloud & Database</span>
+            <span>Cloud & DB</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('staff')}
-            className={`flex items-center space-x-2 py-2.5 px-4 text-xs font-bold border-b-2 transition-all ${
+            className={`flex items-center space-x-2 py-2.5 px-3.5 text-xs font-bold border-b-2 shrink-0 transition-all ${
               activeTab === 'staff'
                 ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg shadow-2xs'
                 : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Staff & Teachers</span>
+            <span>Staff Directory</span>
             {staffList.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-100 text-indigo-800">
                 {staffList.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('substitutes')}
+            className={`flex items-center space-x-2 py-2.5 px-3.5 text-xs font-bold border-b-2 shrink-0 transition-all ${
+              activeTab === 'substitutes'
+                ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg shadow-2xs'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <CalendarCheck className="w-4 h-4" />
+            <span>Daily Substitutes</span>
+            {delegationsList.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
+                {delegationsList.length}
               </span>
             )}
           </button>
@@ -756,6 +898,184 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* TAB 3: DAILY SUBSTITUTES ("Today's Substitute" Mode) */}
+          {activeTab === 'substitutes' && (
+            <div className="space-y-4">
+              {/* Date Filter & Intro Banner */}
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start space-x-2.5">
+                  <CalendarCheck className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-extrabold text-amber-950 uppercase tracking-wide">
+                      Teacher Absence & 1-Day Delegation
+                    </h4>
+                    <p className="text-[11px] text-amber-800 leading-tight">
+                      When a teacher is absent, assign a substitute. The substitute will temporarily see both their own class and the covered class in their app.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2 shrink-0">
+                  <span className="text-[11px] font-bold text-slate-700">Date:</span>
+                  <input
+                    type="date"
+                    value={delegationDate}
+                    onChange={(e) => setDelegationDate(e.target.value)}
+                    className="text-xs font-semibold px-2.5 py-1 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Status Message */}
+              {delMessage && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-start space-x-2 ${
+                    delMessage.type === 'success'
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
+                      : 'bg-rose-50 border border-rose-200 text-rose-900'
+                  }`}
+                >
+                  {delMessage.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <span>{delMessage.text}</span>
+                </div>
+              )}
+
+              {/* Active Delegations on this Date */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700 px-1">
+                  <span>Active Substitutions on {delegationDate} ({delegationsList.length})</span>
+                  {delegationsLoading && <span className="text-slate-400 font-normal">Loading...</span>}
+                </div>
+
+                {delegationsList.length === 0 ? (
+                  <div className="p-4 text-center bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
+                    No teacher absences or substitutions recorded for {delegationDate}. All regular teachers have access to their standard classes.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {delegationsList.map((del) => (
+                      <div
+                        key={del.id}
+                        className="p-3 bg-white border border-amber-300/80 rounded-xl shadow-2xs flex items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                            <UserCheck className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 truncate">
+                              {del.classroom_name}: <span className="text-indigo-600">{del.substitute_teacher_name}</span> is covering
+                            </p>
+                            <p className="text-[11px] text-slate-600 truncate">
+                              Absent: <span className="text-rose-600 font-medium">{del.absent_teacher_name}</span> • Substitute Email: <span className="font-mono text-slate-500">{del.substitute_teacher_email}</span>
+                            </p>
+                            {del.notes && (
+                              <p className="text-[10px] text-slate-500 italic truncate mt-0.5">
+                                Note: {del.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleCancelDelegation(del)}
+                          className="px-2.5 py-1 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors shrink-0"
+                          title="Cancel substitute assignment"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Assign Substitute Form */}
+              <form
+                onSubmit={handleAssignSubstitute}
+                className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 pt-3"
+              >
+                <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
+                  <UserPlus className="w-4 h-4 text-indigo-600" />
+                  <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                    Mark Teacher Absent & Assign Substitute
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                      1. Which Classroom / Teacher is Absent? *
+                    </label>
+                    <select
+                      required
+                      value={delAbsentClassId}
+                      onChange={(e) => setDelAbsentClassId(e.target.value)}
+                      className="w-full text-xs font-semibold px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">-- Select Absent Classroom --</option>
+                      {availableClassrooms.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.teacherName ? `(${c.teacherName})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                      2. Who is the Substitute Teacher? *
+                    </label>
+                    <select
+                      required
+                      value={delSubStaffId}
+                      onChange={(e) => setDelSubStaffId(e.target.value)}
+                      className="w-full text-xs font-semibold px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="">-- Select Substitute Teacher --</option>
+                      {staffList.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.role === 'Admin' ? 'Admin' : s.assigned_classes})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                    3. Delegation Notes (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Covering full day session or morning observation"
+                    value={delNotes}
+                    onChange={(e) => setDelNotes(e.target.value)}
+                    className="w-full text-xs px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={delSubmitting || !delAbsentClassId || !delSubStaffId}
+                    className="px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-xs disabled:opacity-50 flex items-center space-x-1.5"
+                  >
+                    <CalendarCheck className="w-3.5 h-3.5" />
+                    <span>
+                      {delSubmitting ? 'Saving Delegation...' : '⚡ Assign Substitute for This Day'}
+                    </span>
+                  </button>
+                </div>
+              </form>
             </div>
           )}
         </div>

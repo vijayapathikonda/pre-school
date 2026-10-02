@@ -1,6 +1,6 @@
 import React from 'react';
-import { Classroom } from '../../types/observation';
-import { Calendar, Settings, Users, Shield, UserCheck, LogOut, RefreshCw } from 'lucide-react';
+import { Classroom, TeacherDelegation } from '../../types/observation';
+import { Calendar, Settings, Users, Shield, UserCheck, LogOut, RefreshCw, CalendarCheck } from 'lucide-react';
 import { getTurso } from '../../db/tursoClient';
 import { SchoolLogo } from '../common/SchoolLogo';
 import { AuthUser } from '../auth/LoginPage';
@@ -12,6 +12,7 @@ interface HeaderProps {
   selectedClassroomId: string;
   onClassroomChange: (id: string) => void;
   onOpenSettings: () => void;
+  onOpenSubstitutes?: () => void;
   schoolName: string;
   totalStudents: number;
   currentUser: AuthUser;
@@ -19,6 +20,8 @@ interface HeaderProps {
   isSyncing?: boolean;
   onManualSync?: () => Promise<void>;
   lastSyncTime?: string | null;
+  activeDelegations?: TeacherDelegation[];
+  effectiveAssignedClasses?: string[];
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -28,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
   selectedClassroomId,
   onClassroomChange,
   onOpenSettings,
+  onOpenSubstitutes,
   schoolName,
   totalStudents,
   currentUser,
@@ -35,6 +39,8 @@ export const Header: React.FC<HeaderProps> = ({
   isSyncing = false,
   onManualSync,
   lastSyncTime,
+  activeDelegations = [],
+  effectiveAssignedClasses,
 }) => {
   const isCloudActive = !!getTurso();
   const todayStr = new Date().toISOString().split('T')[0];
@@ -42,11 +48,12 @@ export const Header: React.FC<HeaderProps> = ({
 
   const currentClass = classrooms.find((c) => c.id === selectedClassroomId);
 
-  // Filter available classrooms for the teacher
+  // Filter available classrooms for the teacher (including temporary substitute delegations!)
+  const effectiveClasses = effectiveAssignedClasses || currentUser.assignedClasses || [];
   const availableClassrooms =
-    currentUser.role === 'admin' || (currentUser.assignedClasses && currentUser.assignedClasses.includes('*'))
+    currentUser.role === 'admin' || effectiveClasses.includes('*')
       ? classrooms
-      : classrooms.filter((c) => currentUser.assignedClasses?.includes(c.id));
+      : classrooms.filter((c) => effectiveClasses.includes(c.id));
 
   // Dynamic Observation Title based on active classroom
   const dynamicObservationTitle = currentClass
@@ -125,6 +132,23 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
+          {/* Daily Substitutes shortcut (Admin only) */}
+          {currentUser.role === 'admin' && onOpenSubstitutes && (
+            <button
+              onClick={onOpenSubstitutes}
+              className="p-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors border border-slate-700 text-xs font-bold flex items-center space-x-1.5"
+              title="Daily Teacher Substitutes"
+            >
+              <CalendarCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Substitutes</span>
+              {activeDelegations.length > 0 && (
+                <span className="w-4 h-4 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center">
+                  {activeDelegations.length}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* Settings icon (Admin only or all) */}
           {currentUser.role === 'admin' && (
             <button
@@ -169,11 +193,18 @@ export const Header: React.FC<HeaderProps> = ({
                 {currentUser.role === 'admin' && (
                   <option value="ALL">All Classes ({totalStudents} students)</option>
                 )}
-                {availableClassrooms.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+                {availableClassrooms.map((c) => {
+                  const isDelegated = activeDelegations.some(
+                    (d) =>
+                      d.classroom_id === c.id &&
+                      d.substitute_teacher_email.toLowerCase() === currentUser.email?.toLowerCase()
+                  );
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {isDelegated ? '⚡ (Covering Today)' : ''}
+                    </option>
+                  );
+                })}
               </select>
             )}
           </div>
