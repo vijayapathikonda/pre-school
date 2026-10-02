@@ -5,18 +5,15 @@ import {
   Database,
   Download,
   Upload,
-  Copy,
-  Check,
-  Building2
+  Building2,
 } from 'lucide-react';
 import {
-  getSupabaseCredentials,
-  saveSupabaseCredentials,
-  SUPABASE_SETUP_SQL,
-  getSupabase,
-  testSupabaseConnection,
+  getTursoCredentials,
+  saveTursoCredentials,
+  getTurso,
+  testTursoConnection,
   syncRosterToCloud
-} from '../../db/supabaseClient';
+} from '../../db/tursoClient';
 import { db } from '../../db/schema';
 import { exportAllDataAsJSON, importDataFromJSON, downloadFile } from '../../db/exportImport';
 
@@ -35,24 +32,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateSchoolName,
   onDataImported,
 }) => {
-  const creds = getSupabaseCredentials();
-  const [supabaseUrl, setSupabaseUrl] = useState(creds.url);
-  const [supabaseKey, setSupabaseKey] = useState(creds.key);
+  const creds = getTursoCredentials();
+  const [tursoUrl, setTursoUrl] = useState(creds.url);
+  const [tursoToken, setTursoToken] = useState(creds.token);
   const [currentSchoolName, setCurrentSchoolName] = useState(schoolName);
-  const [showSql, setShowSql] = useState(false);
-  const [copiedSql, setCopiedSql] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const [isSyncingRoster, setIsSyncingRoster] = useState(false);
+
+  if (!isOpen) return null;
 
   const handleTestConnection = async () => {
-    if (!supabaseUrl.trim() || !supabaseKey.trim()) {
-      setSyncStatusMsg('⚠️ Please enter both Project URL and Anon Public Key first.');
+    if (!tursoUrl.trim() || !tursoToken.trim()) {
+      setSyncStatusMsg('⚠️ Please enter both Turso Database URL and Auth Token.');
       return;
     }
     setIsTesting(true);
-    setSyncStatusMsg('Testing connection to Supabase...');
-    saveSupabaseCredentials(supabaseUrl, supabaseKey);
-    const res = await testSupabaseConnection(supabaseUrl, supabaseKey);
+    setSyncStatusMsg('Testing connection to Turso SQLite database...');
+    saveTursoCredentials(tursoUrl, tursoToken);
+    const res = await testTursoConnection(tursoUrl, tursoToken);
     setIsTesting(false);
     if (res.success) {
       setSyncStatusMsg(`🎉 ${res.message}`);
@@ -61,46 +59,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const [isSyncingRoster, setIsSyncingRoster] = useState(false);
-
   const handleSyncRoster = async () => {
-    if (!supabaseUrl.trim() || !supabaseKey.trim()) {
-      setSyncStatusMsg('⚠️ Please enter both Project URL and Anon Public Key first.');
+    if (!tursoUrl.trim() || !tursoToken.trim()) {
+      setSyncStatusMsg('⚠️ Please enter both Turso Database URL and Auth Token first.');
       return;
     }
-    saveSupabaseCredentials(supabaseUrl, supabaseKey);
+    saveTursoCredentials(tursoUrl, tursoToken);
     setIsSyncingRoster(true);
-    setSyncStatusMsg('Syncing students and classrooms to Supabase...');
+    setSyncStatusMsg('Syncing students and classrooms to Turso...');
     const classrooms = await db.classrooms.toArray();
     const students = await db.students.toArray();
     const result = await syncRosterToCloud(classrooms, students);
     setIsSyncingRoster(false);
     if (result.success) {
-      setSyncStatusMsg(`🎉 Successfully synced ${result.count} students and ${classrooms.length} classrooms to Supabase!`);
+      setSyncStatusMsg(`🎉 Successfully synced ${result.count} students and ${classrooms.length} classrooms to Turso!`);
     } else {
       setSyncStatusMsg(`⚠️ Roster sync error: ${result.error}`);
     }
   };
 
-  if (!isOpen) return null;
-
   const handleSaveSettings = () => {
-    saveSupabaseCredentials(supabaseUrl, supabaseKey);
+    saveTursoCredentials(tursoUrl, tursoToken);
     onUpdateSchoolName(currentSchoolName);
 
-    const client = getSupabase();
-    if (supabaseUrl && supabaseKey && client) {
-      setSyncStatusMsg('✅ Cloud settings saved. Supabase client initialized!');
+    const client = getTurso();
+    if (tursoUrl && tursoToken && client) {
+      setSyncStatusMsg('✅ Cloud settings saved. Turso client initialized!');
     } else {
       setSyncStatusMsg('✅ Settings saved in offline-first mode.');
     }
     setTimeout(() => setSyncStatusMsg(null), 3000);
-  };
-
-  const handleCopySql = () => {
-    navigator.clipboard.writeText(SUPABASE_SETUP_SQL);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2500);
   };
 
   const handleDownloadBackup = async () => {
@@ -129,14 +117,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden my-6">
-        
         {/* Modal Header */}
         <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center space-x-2.5">
             <Building2 className="w-5 h-5 text-indigo-400" />
             <div>
               <h3 className="text-sm font-bold">School & Cloud Database Settings</h3>
-              <p className="text-[11px] text-slate-400">Zero-cost multi-device sync configuration</p>
+              <p className="text-[11px] text-slate-400">Turso LibSQL Edge Database</p>
             </div>
           </div>
           <button
@@ -157,49 +144,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               type="text"
               value={currentSchoolName}
               onChange={(e) => setCurrentSchoolName(e.target.value)}
-              placeholder="e.g. Sunshine Preschool & Daycare"
+              placeholder="e.g. Pragathi Vidyalaya School"
               className="w-full text-xs font-semibold px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
             />
           </section>
 
-          {/* Cloud Database (Supabase Free Tier) */}
+          {/* Cloud Database (Turso Free Tier) */}
           <section className="bg-slate-50 rounded-xl p-4 border border-slate-200">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2">
                 <Cloud className="w-4 h-4 text-indigo-600" />
-                <h4 className="text-xs font-bold text-slate-900">Supabase Cloud Database (Free Tier)</h4>
+                <h4 className="text-xs font-bold text-slate-900">Turso Cloud Database (LibSQL)</h4>
               </div>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                $0 / month
+                9 GB Free Storage
               </span>
             </div>
             <p className="text-[11px] text-slate-600 mb-3 leading-relaxed">
-              Connect your free Supabase project to automatically sync observations across multiple teachers&apos; phones. If left blank, the app runs 100% offline-first.
+              Connected to your Turso edge SQLite database. High-speed multi-device synchronization with 1 billion reads/month at $0/month.
             </p>
 
             <div className="space-y-2.5">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                  Project URL
+                  Turso Database URL
                 </label>
                 <input
                   type="text"
-                  placeholder="https://your-project.supabase.co"
-                  value={supabaseUrl}
-                  onChange={(e) => setSupabaseUrl(e.target.value)}
+                  placeholder="https://your-db.turso.io"
+                  value={tursoUrl}
+                  onChange={(e) => setTursoUrl(e.target.value)}
                   className="w-full text-xs font-mono px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                  Anon Public Key
+                  Turso Auth Token
                 </label>
                 <input
                   type="password"
                   placeholder="eyJh..."
-                  value={supabaseKey}
-                  onChange={(e) => setSupabaseKey(e.target.value)}
+                  value={tursoToken}
+                  onChange={(e) => setTursoToken(e.target.value)}
                   className="w-full text-xs font-mono px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
@@ -222,36 +209,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center space-x-1.5 transition-colors shadow-2xs disabled:opacity-50 border border-slate-700"
                 >
                   <Building2 className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>{isSyncingRoster ? 'Syncing...' : '👥 Sync All Students to Cloud'}</span>
+                  <span>{isSyncingRoster ? 'Syncing...' : '👥 Push Roster to Turso'}</span>
                 </button>
-              </div>
-
-              {/* 1-Click SQL Setup Script */}
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowSql(!showSql)}
-                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center space-x-1"
-                >
-                  <span>{showSql ? '▼ Hide Supabase SQL Setup' : '▶ Show 1-Click Supabase SQL Script'}</span>
-                </button>
-
-                {showSql && (
-                  <div className="mt-2 bg-slate-900 rounded-lg p-3 text-slate-200 text-[10px] font-mono border border-slate-800">
-                    <div className="flex justify-between items-center mb-2 pb-1 border-b border-slate-800">
-                      <span className="text-slate-400">Copy & run in Supabase SQL Editor:</span>
-                      <button
-                        type="button"
-                        onClick={handleCopySql}
-                        className="px-2 py-0.5 rounded bg-indigo-600 text-white text-[10px] font-bold flex items-center space-x-1 hover:bg-indigo-500"
-                      >
-                        {copiedSql ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedSql ? 'Copied!' : 'Copy SQL'}</span>
-                      </button>
-                    </div>
-                    <pre className="max-h-36 overflow-y-auto whitespace-pre-wrap">{SUPABASE_SETUP_SQL}</pre>
-                  </div>
-                )}
               </div>
             </div>
           </section>

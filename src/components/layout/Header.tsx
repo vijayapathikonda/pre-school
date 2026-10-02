@@ -1,7 +1,7 @@
 import React from 'react';
 import { Classroom } from '../../types/observation';
 import { Calendar, Settings, Users, Shield, UserCheck, LogOut, RefreshCw } from 'lucide-react';
-import { getSupabase } from '../../db/supabaseClient';
+import { getTurso } from '../../db/tursoClient';
 import { SchoolLogo } from '../common/SchoolLogo';
 import { AuthUser } from '../auth/LoginPage';
 
@@ -36,11 +36,17 @@ export const Header: React.FC<HeaderProps> = ({
   onManualSync,
   lastSyncTime,
 }) => {
-  const isCloudActive = !!getSupabase();
+  const isCloudActive = !!getTurso();
   const todayStr = new Date().toISOString().split('T')[0];
   const isToday = selectedDate === todayStr;
 
   const currentClass = classrooms.find((c) => c.id === selectedClassroomId);
+
+  // Filter available classrooms for the teacher
+  const availableClassrooms =
+    currentUser.role === 'admin' || (currentUser.assignedClasses && currentUser.assignedClasses.includes('*'))
+      ? classrooms
+      : classrooms.filter((c) => currentUser.assignedClasses?.includes(c.id));
 
   // Dynamic Observation Title based on active classroom
   const dynamicObservationTitle = currentClass
@@ -91,9 +97,9 @@ export const Header: React.FC<HeaderProps> = ({
               disabled={isSyncing}
               title={
                 isSyncing
-                  ? 'Syncing with Supabase Cloud...'
+                  ? 'Syncing with Turso Database...'
                   : isCloudActive
-                  ? `Cloud Connected${lastSyncTime ? ` (Last sync: ${lastSyncTime})` : ''}. Tap to sync latest observations.`
+                  ? `Turso Cloud Connected${lastSyncTime ? ` (Last sync: ${lastSyncTime})` : ''}. Tap to sync latest observations.`
                   : 'Running in offline mode. Tap to retry connection.'
               }
               className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
@@ -158,7 +164,7 @@ export const Header: React.FC<HeaderProps> = ({
               {currentUser.role === 'admin' && (
                 <option value="ALL">All Classes ({totalStudents} students)</option>
               )}
-              {classrooms.map((c) => (
+              {availableClassrooms.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>

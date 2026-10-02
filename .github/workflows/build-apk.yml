@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, turso-firebase ]
   workflow_dispatch:
 
 permissions:
@@ -34,8 +34,14 @@ jobs:
     - name: Build Web App
       run: npm run build
       env:
-        VITE_SUPABASE_URL: https://ctounkidbhnfrcrjnmmu.supabase.co
-        VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0b3Vua2lkYmhuZnJjcmpubW11Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3OTkxNTIsImV4cCI6MjEwNTM3NTE1Mn0.5cjuHaaSs0rfaRML3s7iNahDuRzaH0ZGMK_2BAeQAZs
+        VITE_TURSO_DATABASE_URL: https://pragathi-preschool-vijaya.aws-ap-south-1.turso.io
+        VITE_TURSO_AUTH_TOKEN: eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTA4Njg2NDYsImlkIjoiMDFhMGY4MGYtMjUwMS03YTgwLWE0NzYtNzNmM2JiNzRkMjY3Iiwia2lkIjoiSXdkdmN2SUlFdlhocHlSWm91RmV2OUJZcDFmQnBBWVozb3MtM1U5anRDdyIsInJpZCI6IjhlYjRjZDRiLTJiOTAtNGU0Yy1iNGZlLWQyMTYwYmMwMGYzMSJ9.n4IHm_DuSKPwbcU3klkwCLCldXgEST9Y3OIkZ6BuDTvbaYU_42Z4WSuZ4mSe2nbqfH5MpDo7S8a0mk0A-3BaDQ
+        VITE_FIREBASE_API_KEY: AIzaSyBFtsqhCq4Cy4ZnAFFUSkJ9X8RWttxUv64
+        VITE_FIREBASE_AUTH_DOMAIN: pragati-preschool.firebaseapp.com
+        VITE_FIREBASE_PROJECT_ID: pragati-preschool
+        VITE_FIREBASE_STORAGE_BUCKET: pragati-preschool.firebasestorage.app
+        VITE_FIREBASE_MESSAGING_SENDER_ID: "862077392244"
+        VITE_FIREBASE_APP_ID: 1:862077392244:web:ff5aa313e7ef0533df4821
 
     - name: Sync Capacitor Android
       run: npx cap sync android
@@ -58,7 +64,7 @@ jobs:
 
     - name: Publish Direct Download to GitHub Releases
       uses: softprops/action-gh-release@v2
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/turso-firebase'
       with:
         tag_name: latest
         name: "Pragathi Vidyalaya School Mobile APK"

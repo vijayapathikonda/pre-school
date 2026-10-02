@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import { Student, DailyObservation, Classroom } from '../types/observation';
 import { REAL_CLASSROOMS, REAL_STUDENTS } from './sampleData';
-import { syncObservationToCloud, syncRosterToCloud, fetchCloudRoster } from './supabaseClient';
+import { syncObservationToCloud, syncRosterToCloud, fetchCloudRoster } from './tursoClient';
 
 export interface AppSetting {
   key: string;
@@ -16,7 +16,7 @@ export class PreschoolDatabase extends Dexie {
 
   constructor() {
     super('PreschoolObsDB');
-    this.version(3).stores({
+    this.version(4).stores({
       classrooms: 'id, name, ageGroup',
       students: 'id, name, classroomId, classroomName, active, createdAt',
       observations: '++id, studentId, date, [studentId+date], present, recordedAt',
@@ -31,14 +31,14 @@ export const SCHOOL_NAME = 'Pragathi Vidyalaya School';
 
 // Seed initial classrooms and students for Pragathi Vidyalaya School
 export async function initializeDatabase(): Promise<void> {
-  const schoolMigrated = await db.settings.get('pragathi_migrated_v1');
+  const schoolMigrated = await db.settings.get('pragathi_migrated_turso_v1');
 
-  // If not yet migrated to Pragathi Vidyalaya School, clean legacy mock data and seed real data
+  // If not yet migrated to Pragathi Vidyalaya School 12-class roster, seed new data
   if (!schoolMigrated) {
     await db.students.clear();
     await db.classrooms.clear();
 
-    // Check if cloud already has the master roster
+    // Check if Turso already has the master roster
     try {
       const cloudRoster = await fetchCloudRoster();
       if (cloudRoster && cloudRoster.students.length > 0) {
@@ -47,11 +47,11 @@ export async function initializeDatabase(): Promise<void> {
         await db.settings.put({ key: 'schoolName', value: SCHOOL_NAME });
         await db.settings.put({ key: 'activeClassroomId', value: cloudRoster.classrooms[0]?.id || REAL_CLASSROOMS[0].id });
         await db.settings.put({ key: 'adminPin', value: '1234' });
-        await db.settings.put({ key: 'pragathi_migrated_v1', value: true });
+        await db.settings.put({ key: 'pragathi_migrated_turso_v1', value: true });
         return;
       }
     } catch (err) {
-      console.warn('Could not fetch initial cloud roster:', err);
+      console.warn('Could not fetch initial Turso roster:', err);
     }
 
     await db.classrooms.bulkAdd(REAL_CLASSROOMS);
@@ -60,9 +60,9 @@ export async function initializeDatabase(): Promise<void> {
     await db.settings.put({ key: 'schoolName', value: SCHOOL_NAME });
     await db.settings.put({ key: 'activeClassroomId', value: REAL_CLASSROOMS[0].id });
     await db.settings.put({ key: 'adminPin', value: '1234' });
-    await db.settings.put({ key: 'pragathi_migrated_v1', value: true });
+    await db.settings.put({ key: 'pragathi_migrated_turso_v1', value: true });
 
-    // Attempt initial sync to Supabase in background
+    // Attempt initial sync to Turso in background
     syncRosterToCloud(REAL_CLASSROOMS, REAL_STUDENTS).catch((err) =>
       console.warn('Initial cloud sync pending:', err)
     );

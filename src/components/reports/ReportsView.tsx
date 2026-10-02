@@ -5,7 +5,7 @@ import { FileText, Download, Share2, Calendar } from 'lucide-react';
 import { generateDailyObservationPDF } from './pdfGenerator';
 import { shareViaWhatsApp } from '../../utils/whatsappShare';
 import { exportObservationsToCSV, downloadFile } from '../../db/exportImport';
-import { fetchStudentCloudHistory } from '../../db/supabaseClient';
+import { fetchStudentCloudHistory } from '../../db/tursoClient';
 
 interface ReportsViewProps {
   students: Student[];

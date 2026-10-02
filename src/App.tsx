@@ -5,7 +5,7 @@ import {
   fetchCloudObservations, 
   fetchCloudRoster, 
   subscribeToCloudObservations 
-} from './db/supabaseClient';
+} from './db/tursoClient';
 import { Header } from './components/layout/Header';
 import { Navigation, TabType } from './components/layout/Navigation';
 import { StudentRosterBar } from './components/observation/StudentRosterBar';
@@ -307,9 +307,13 @@ export const App: React.FC = () => {
       <LoginPage
         onLoginSuccess={(user) => {
           setCurrentUser(user);
-          // If teacher logs in, ensure a specific classroom is selected
-          if (user.role === 'teacher' && selectedClassroomId === 'ALL') {
-            setSelectedClassroomId(classrooms[0]?.id || 'c_jnana');
+          // If teacher logs in with assigned classes, auto-select their classroom
+          if (user.defaultClassId) {
+            setSelectedClassroomId(user.defaultClassId);
+          } else if (user.assignedClasses && user.assignedClasses.length > 0 && !user.assignedClasses.includes('*')) {
+            setSelectedClassroomId(user.assignedClasses[0]);
+          } else if (user.role === 'teacher' && selectedClassroomId === 'ALL') {
+            setSelectedClassroomId(classrooms[0]?.id || 'nursery_jnana');
           }
         }}
         schoolName={schoolName}
