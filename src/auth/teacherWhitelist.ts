@@ -7,6 +7,13 @@ export interface TeacherProfile {
 }
 
 export const TEACHER_WHITELIST: Record<string, TeacherProfile> = {
+  'vijaya010590@gmail.com': {
+    name: 'Vijaya (Teacher)',
+    email: 'vijaya010590@gmail.com',
+    role: 'Teacher',
+    assignedClasses: ['ukg_jnana'],
+    defaultClassId: 'ukg_jnana',
+  },
   'vijaya.pathikonda@gmail.com': {
     name: 'Vijaya Pathikonda',
     email: 'vijaya.pathikonda@gmail.com',

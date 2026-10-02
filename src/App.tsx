@@ -166,11 +166,31 @@ export const App: React.FC = () => {
     };
   }, [ready, selectedDate]);
 
-  // Filter students based on classroom selection
+  // Enforce classroom scoping on user login or switch
+  useEffect(() => {
+    if (currentUser?.role === 'teacher' && currentUser.assignedClasses && !currentUser.assignedClasses.includes('*')) {
+      const allowedClass = currentUser.defaultClassId || currentUser.assignedClasses[0];
+      if (selectedClassroomId !== allowedClass && !currentUser.assignedClasses.includes(selectedClassroomId)) {
+        setSelectedClassroomId(allowedClass);
+      }
+    }
+  }, [currentUser, selectedClassroomId]);
+
+  // Filter students based on classroom selection and user authorization scope
   const classroomStudents = useMemo(() => {
-    if (selectedClassroomId === 'ALL') return students;
+    // Admins can view 'ALL'
+    if (selectedClassroomId === 'ALL' && currentUser?.role === 'admin') return students;
+
+    // Teachers are strictly restricted to their assigned classroom
+    if (currentUser?.role === 'teacher' && currentUser.assignedClasses && !currentUser.assignedClasses.includes('*')) {
+      const allowedId = currentUser.assignedClasses.includes(selectedClassroomId)
+        ? selectedClassroomId
+        : currentUser.defaultClassId || currentUser.assignedClasses[0];
+      return students.filter((s) => s.classroomId === allowedId);
+    }
+
     return students.filter((s) => s.classroomId === selectedClassroomId);
-  }, [students, selectedClassroomId]);
+  }, [students, selectedClassroomId, currentUser]);
 
   // Ensure active student is valid when classroom changes
   useEffect(() => {
@@ -402,8 +422,12 @@ export const App: React.FC = () => {
 
         {currentTab === 'roster' && (
           <StudentList
-            students={students}
-            classrooms={classrooms}
+            students={currentUser.role === 'admin' ? students : classroomStudents}
+            classrooms={
+              currentUser.role === 'admin'
+                ? classrooms
+                : classrooms.filter((c) => currentUser.assignedClasses?.includes(c.id))
+            }
             selectedClassroomId={selectedClassroomId}
             onRefreshRoster={loadData}
             isAdmin={currentUser.role === 'admin'}

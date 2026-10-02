@@ -156,20 +156,26 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center space-x-2">
             <Users className="w-4 h-4 text-slate-400 shrink-0" />
             <span className="text-xs text-slate-400 font-medium shrink-0">Class:</span>
-            <select
-              value={selectedClassroomId}
-              onChange={(e) => onClassroomChange(e.target.value)}
-              className="bg-slate-900 text-amber-300 font-bold text-xs rounded-md px-2.5 py-1.5 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 max-w-[210px] sm:max-w-[280px]"
-            >
-              {currentUser.role === 'admin' && (
-                <option value="ALL">All Classes ({totalStudents} students)</option>
-              )}
-              {availableClassrooms.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            {availableClassrooms.length <= 1 ? (
+              <span className="bg-slate-900 text-amber-300 font-extrabold text-xs rounded-md px-3 py-1.5 border border-slate-700 tracking-wide shadow-xs">
+                {availableClassrooms[0]?.name || currentClass?.name || 'Assigned Class'}
+              </span>
+            ) : (
+              <select
+                value={selectedClassroomId}
+                onChange={(e) => onClassroomChange(e.target.value)}
+                className="bg-slate-900 text-amber-300 font-bold text-xs rounded-md px-2.5 py-1.5 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 max-w-[210px] sm:max-w-[280px]"
+              >
+                {currentUser.role === 'admin' && (
+                  <option value="ALL">All Classes ({totalStudents} students)</option>
+                )}
+                {availableClassrooms.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Date Picker */}
