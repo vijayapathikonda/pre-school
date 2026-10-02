@@ -461,6 +461,7 @@ export const App: React.FC = () => {
         schoolName={schoolName}
         onUpdateSchoolName={handleUpdateSchoolName}
         onDataImported={loadData}
+        classrooms={classrooms}
       />
 
       {/* Global Toast Notification Prompt */}

@@ -1,5 +1,6 @@
 import { createClient, Client } from '@libsql/client/web';
 import { DailyObservation, Student, Classroom } from '../types/observation';
+import { TeacherProfile } from '../auth/teacherWhitelist';
 
 let tursoInstance: Client | null = null;
 
@@ -331,3 +332,125 @@ export function subscribeToCloudObservations(
     clearInterval(pollInterval);
   };
 }
+
+// -------------------------------------------------------------
+// Dynamic Staff & Teacher Management Functions (Zero Code Change Onboarding)
+// -------------------------------------------------------------
+
+export interface StaffRecord {
+  id: string;
+  name: string;
+  email: string;
+  role: 'Admin' | 'Teacher';
+  assigned_classes: string;
+  created_at?: string;
+}
+
+export async function fetchAllStaff(): Promise<StaffRecord[]> {
+  const turso = getTurso();
+  if (!turso) return [];
+
+  try {
+    const res = await turso.execute('SELECT * FROM staff ORDER BY role ASC, name ASC');
+    return res.rows.map((r: any) => ({
+      id: String(r.id),
+      name: String(r.name),
+      email: String(r.email),
+      role: (String(r.role).toLowerCase() === 'admin' ? 'Admin' : 'Teacher') as 'Admin' | 'Teacher',
+      assigned_classes: String(r.assigned_classes || ''),
+      created_at: r.created_at ? String(r.created_at) : undefined,
+    }));
+  } catch (err) {
+    console.error('Failed to fetch staff from Turso:', err);
+    return [];
+  }
+}
+
+export async function saveStaffToCloud(staff: {
+  id?: string;
+  name: string;
+  email: string;
+  role: 'Admin' | 'Teacher';
+  assigned_classes: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const turso = getTurso();
+  if (!turso) return { success: false, error: 'Database client not connected.' };
+
+  try {
+    const staffId = staff.id || `staff_${Date.now()}`;
+    await turso.execute({
+      sql: `INSERT OR REPLACE INTO staff (id, name, email, role, assigned_classes) VALUES (?, ?, ?, ?, ?)`,
+      args: [staffId, staff.name.trim(), staff.email.trim().toLowerCase(), staff.role, staff.assigned_classes.trim()],
+    });
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to save staff:', err);
+    return { success: false, error: err.message || 'Failed to save staff record.' };
+  }
+}
+
+export async function deleteStaffFromCloud(id: string): Promise<{ success: boolean; error?: string }> {
+  const turso = getTurso();
+  if (!turso) return { success: false, error: 'Database client not connected.' };
+
+  try {
+    await turso.execute({
+      sql: `DELETE FROM staff WHERE id = ?`,
+      args: [id],
+    });
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to delete staff:', err);
+    return { success: false, error: err.message || 'Failed to delete staff member.' };
+  }
+}
+
+export async function fetchTeacherProfileFromTurso(
+  email: string | null | undefined
+): Promise<TeacherProfile | null> {
+  if (!email) return null;
+  const turso = getTurso();
+  if (!turso) return null;
+
+  try {
+    const res = await turso.execute({
+      sql: 'SELECT * FROM staff WHERE LOWER(email) = LOWER(?) LIMIT 1',
+      args: [email.trim().toLowerCase()],
+    });
+
+    if (res.rows.length === 0) return null;
+    const row: any = res.rows[0];
+    const role: 'Admin' | 'Teacher' =
+      String(row.role).toLowerCase() === 'admin' ? 'Admin' : 'Teacher';
+    const assignedRaw = String(row.assigned_classes || '').trim();
+
+    // Parse assigned classes
+    let assignedClasses: string[] = [];
+    if (role === 'Admin' || assignedRaw.includes('*') || assignedRaw.toLowerCase().includes('all classes')) {
+      assignedClasses = ['*'];
+    } else {
+      // Split by comma
+      const parts = assignedRaw.split(',').map((p) => p.trim());
+      // Convert to clean classroom IDs (e.g. "UKG Jnana" -> "ukg_jnana")
+      assignedClasses = parts.map((p) => {
+        return p.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      }).filter(Boolean);
+
+      if (assignedClasses.length === 0) {
+        assignedClasses = ['*'];
+      }
+    }
+
+    return {
+      name: String(row.name),
+      email: String(row.email).toLowerCase(),
+      role,
+      assignedClasses,
+      defaultClassId: assignedClasses[0] !== '*' ? assignedClasses[0] : undefined,
+    };
+  } catch (err) {
+    console.error('Error fetching teacher profile from Turso:', err);
+    return null;
+  }
+}
+

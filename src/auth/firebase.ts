@@ -7,6 +7,7 @@ import {
   User,
 } from 'firebase/auth';
 import { getTeacherProfile, TeacherProfile } from './teacherWhitelist';
+import { fetchTeacherProfileFromTurso } from '../db/tursoClient';
 
 const env = (import.meta as any).env || {};
 
@@ -34,7 +35,19 @@ export interface AuthState {
 export async function loginWithGoogle(): Promise<{ user: User; teacher: TeacherProfile }> {
   const result = await signInWithPopup(auth, googleProvider);
   const user = result.user;
-  const teacher = getTeacherProfile(user.email);
+
+  // 1. Dynamic Turso cloud database lookup (enables zero-code teacher onboarding)
+  let teacher: TeacherProfile | null = null;
+  try {
+    teacher = await fetchTeacherProfileFromTurso(user.email);
+  } catch (err) {
+    console.warn('Turso staff lookup failed, attempting local whitelist fallback:', err);
+  }
+
+  // 2. Fallback to static whitelist for offline or pre-configured staff
+  if (!teacher) {
+    teacher = getTeacherProfile(user.email);
+  }
 
   if (!teacher) {
     await fbSignOut(auth);
