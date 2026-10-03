@@ -55,6 +55,7 @@ export async function loginWithGoogle(): Promise<{ user: User; teacher: TeacherP
 
   if (Capacitor.isNativePlatform()) {
     // 1. Native Android Google Sign-In using Google Play Services bottom sheet
+    // Bypasses sessionStorage/WebView popups completely to prevent "missing initial state" errors
     try {
       try {
         await GoogleAuth.initialize({
@@ -75,39 +76,36 @@ export async function loginWithGoogle(): Promise<{ user: User; teacher: TeacherP
       const result = await signInWithCredential(auth, credential);
       user = result.user;
     } catch (nativeErr: any) {
-      console.warn('Native Google Sign-In failed or unconfigured, attempting Web Popup fallback...', nativeErr);
+      console.error('Native Google Sign-In error on Android:', nativeErr);
 
-      const rawNativeMsg =
+      const rawMsg =
         typeof nativeErr === 'string'
           ? nativeErr
           : nativeErr?.message || nativeErr?.error || nativeErr?.code || (nativeErr ? JSON.stringify(nativeErr) : 'Unknown native error');
 
-      let nativeHint = '';
-      if (
-        String(rawNativeMsg).includes('10') ||
-        String(nativeErr?.code).includes('10') ||
-        String(rawNativeMsg).toUpperCase().includes('DEVELOPER_ERROR')
-      ) {
-        nativeHint = ' [Android Code 10: SHA-1 fingerprint or google-services.json not added in Firebase Console]';
+      const isCancelled =
+        String(rawMsg).includes('12501') ||
+        String(rawMsg).toLowerCase().includes('cancel') ||
+        nativeErr?.code === 12501;
+
+      if (isCancelled) {
+        throw new Error('Google Sign-in was cancelled. Please try again.');
       }
 
-      // Fallback: Standard Web Sign-In using Browser Popup
-      try {
-        const result = await signInWithPopup(auth, googleProvider);
-        user = result.user;
-      } catch (webErr: any) {
-        const webMsg = webErr?.message || webErr?.code || (typeof webErr === 'string' ? webErr : JSON.stringify(webErr));
+      const isDeveloperError =
+        String(rawMsg).includes('10') ||
+        String(nativeErr?.code).includes('10') ||
+        String(rawMsg).toUpperCase().includes('DEVELOPER_ERROR');
 
-        if (String(webMsg).includes('missing initial state') || String(webMsg).includes('sessionStorage')) {
-          throw new Error(
-            `Mobile App Login Configuration Required:\n\nAndroid WebView restricts sessionStorage for web popups ('missing initial state').\n\nTo enable 1-Click Native Google Sign-In on Android:\n1. Open Firebase Console (pragati-preschool).\n2. Add Android App with package name: com.preschool.childobs\n3. Add your Android SHA-1 certificate fingerprint.\n4. Place google-services.json into android/app/\n\nOr open the Web App URL directly in Chrome browser on your phone.`
-          );
-        }
-
+      if (isDeveloperError) {
         throw new Error(
-          `Google Sign-In failed on Mobile Device.\n• Native Error: ${rawNativeMsg}${nativeHint}\n• Web Fallback Error: ${webMsg}`
+          `Android Google Sign-In Setup Required (Error Code 10: DEVELOPER_ERROR)\n\nGoogle Play Services rejected sign-in because your app is not registered in Firebase.\n\nRequired Setup Steps:\n1. Go to Firebase Console (pragati-preschool).\n2. Register Android App with Package Name: com.preschool.childobs\n3. Add your Android SHA-1 Certificate Fingerprint under App Settings.\n4. Download google-services.json and save to android/app/\n5. Rebuild your Android APK.`
         );
       }
+
+      throw new Error(
+        `Native Google Sign-In Failed on Mobile Device:\n${rawMsg}\n\nPlease check Android SHA-1 fingerprint configuration in Firebase Console for package com.preschool.childobs.`
+      );
     }
   } else {
     // 2. Standard Web Sign-In using Browser Popup
