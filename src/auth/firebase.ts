@@ -35,6 +35,7 @@ if (Capacitor.isNativePlatform()) {
   try {
     GoogleAuth.initialize({
       clientId: GOOGLE_CLIENT_ID,
+      serverClientId: GOOGLE_CLIENT_ID,
       scopes: ['profile', 'email'],
       grantOfflineAccess: true,
     });
@@ -59,6 +60,7 @@ export async function loginWithGoogle(): Promise<{ user: User; teacher: TeacherP
       try {
         await GoogleAuth.initialize({
           clientId: GOOGLE_CLIENT_ID,
+          serverClientId: GOOGLE_CLIENT_ID,
           scopes: ['profile', 'email'],
           grantOfflineAccess: true,
         });
@@ -97,6 +99,13 @@ export async function loginWithGoogle(): Promise<{ user: User; teacher: TeacherP
         user = result.user;
       } catch (webErr: any) {
         const webMsg = webErr?.message || webErr?.code || (typeof webErr === 'string' ? webErr : JSON.stringify(webErr));
+
+        if (String(webMsg).includes('missing initial state') || String(webMsg).includes('sessionStorage')) {
+          throw new Error(
+            `Mobile App Login Configuration Required:\n\nAndroid WebView restricts sessionStorage for web popups ('missing initial state').\n\nTo enable 1-Click Native Google Sign-In on Android:\n1. Open Firebase Console (pragati-preschool).\n2. Add Android App with package name: com.preschool.childobs\n3. Add your Android SHA-1 certificate fingerprint.\n4. Place google-services.json into android/app/\n\nOr open the Web App URL directly in Chrome browser on your phone.`
+          );
+        }
+
         throw new Error(
           `Google Sign-In failed on Mobile Device.\n• Native Error: ${rawNativeMsg}${nativeHint}\n• Web Fallback Error: ${webMsg}`
         );
