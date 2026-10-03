@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "862077392244",
+    "project_id": "pragati-preschool",
+    "storage_bucket": "pragati-preschool.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:862077392244:android:8399a38012782797df4821",
+        "android_client_info": {
+          "package_name": "com.preschool.childobs"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "862077392244-65gpbqt97e1kc4arc75h8q3pg2bkkn6c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCHIb-JGlJehUg4bOc8XNCXnsFM-oJqNBE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "862077392244-65gpbqt97e1kc4arc75h8q3pg2bkkn6c.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
