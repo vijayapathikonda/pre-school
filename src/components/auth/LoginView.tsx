@@ -19,10 +19,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       onLoginSuccess();
     } catch (err: any) {
       console.error('Sign-in error:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
+      const rawMsg = err?.message || (typeof err === 'string' ? err : err ? JSON.stringify(err) : 'An error occurred during Google sign-in.');
+      if (err?.code === 'auth/popup-closed-by-user' || String(rawMsg).includes('popup-closed-by-user')) {
         setErrorMessage('Sign-in popup was closed. Please try again.');
       } else {
-        setErrorMessage(err.message || 'An error occurred during Google sign-in.');
+        setErrorMessage(rawMsg);
       }
     } finally {
       setLoading(false);
@@ -64,7 +65,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         {errorMessage && (
           <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2.5">
             <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-            <div className="leading-relaxed font-medium">{errorMessage}</div>
+            <div className="leading-relaxed font-medium whitespace-pre-line break-words">{errorMessage}</div>
           </div>
         )}
 

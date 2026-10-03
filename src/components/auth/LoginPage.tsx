@@ -45,14 +45,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       onLoginSuccess(authUser);
     } catch (err: any) {
       console.error('Google Sign-in failed:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
+      const rawMsg = err?.message || (typeof err === 'string' ? err : err ? JSON.stringify(err) : 'Failed to authenticate with Google.');
+      if (err?.code === 'auth/popup-closed-by-user' || String(rawMsg).includes('popup-closed-by-user')) {
         setErrorMsg('Sign-in popup was closed. Please try again.');
-      } else if (err.code === 'auth/configuration-not-found' || err.message?.includes('CONFIGURATION_NOT_FOUND')) {
+      } else if (err?.code === 'auth/configuration-not-found' || String(rawMsg).includes('CONFIGURATION_NOT_FOUND')) {
         setErrorMsg(
           'Firebase Authentication is not yet enabled. In Firebase Console, go to Build > Authentication, click "Get Started", enable Google, and save.'
         );
       } else {
-        setErrorMsg(err.message || 'Failed to authenticate with Google.');
+        setErrorMsg(rawMsg);
       }
     } finally {
       setGoogleLoading(false);
@@ -99,7 +100,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         {errorMsg && (
           <div className="p-3.5 bg-rose-950/90 border border-rose-800 rounded-xl text-xs text-rose-300 flex items-start space-x-2.5">
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-            <span className="leading-relaxed font-medium">{errorMsg}</span>
+            <span className="leading-relaxed font-medium whitespace-pre-line break-words">{errorMsg}</span>
           </div>
         )}
 

@@ -30,7 +30,7 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-// Initialize GoogleAuth on native platforms
+// Initialize GoogleAuth on native platforms safely
 if (Capacitor.isNativePlatform()) {
   try {
     GoogleAuth.initialize({
@@ -39,7 +39,7 @@ if (Capacitor.isNativePlatform()) {
       grantOfflineAccess: true,
     });
   } catch (err) {
-    console.warn('Native GoogleAuth.initialize error:', err);
+    console.warn('Native GoogleAuth initial setup notice:', err);
   }
 }
 
@@ -55,15 +55,53 @@ export async function loginWithGoogle(): Promise<{ user: User; teacher: TeacherP
 
   if (Capacitor.isNativePlatform()) {
     // 1. Native Android Google Sign-In using Google Play Services bottom sheet
-    // Bypasses sessionStorage/WebView issues completely
-    const googleUser = await GoogleAuth.signIn();
-    const idToken = googleUser?.authentication?.idToken;
-    if (!idToken) {
-      throw new Error('Failed to retrieve Google ID token from device.');
+    try {
+      try {
+        await GoogleAuth.initialize({
+          clientId: GOOGLE_CLIENT_ID,
+          scopes: ['profile', 'email'],
+          grantOfflineAccess: true,
+        });
+      } catch (initErr) {
+        console.warn('Native GoogleAuth.initialize runtime notice:', initErr);
+      }
+
+      const googleUser = await GoogleAuth.signIn();
+      const idToken = googleUser?.authentication?.idToken;
+      if (!idToken) {
+        throw new Error('No Google ID token returned from device Google Play Services.');
+      }
+      const credential = GoogleAuthProvider.credential(idToken);
+      const result = await signInWithCredential(auth, credential);
+      user = result.user;
+    } catch (nativeErr: any) {
+      console.warn('Native Google Sign-In failed or unconfigured, attempting Web Popup fallback...', nativeErr);
+
+      const rawNativeMsg =
+        typeof nativeErr === 'string'
+          ? nativeErr
+          : nativeErr?.message || nativeErr?.error || nativeErr?.code || (nativeErr ? JSON.stringify(nativeErr) : 'Unknown native error');
+
+      let nativeHint = '';
+      if (
+        String(rawNativeMsg).includes('10') ||
+        String(nativeErr?.code).includes('10') ||
+        String(rawNativeMsg).toUpperCase().includes('DEVELOPER_ERROR')
+      ) {
+        nativeHint = ' [Android Code 10: SHA-1 fingerprint or google-services.json not added in Firebase Console]';
+      }
+
+      // Fallback: Standard Web Sign-In using Browser Popup
+      try {
+        const result = await signInWithPopup(auth, googleProvider);
+        user = result.user;
+      } catch (webErr: any) {
+        const webMsg = webErr?.message || webErr?.code || (typeof webErr === 'string' ? webErr : JSON.stringify(webErr));
+        throw new Error(
+          `Google Sign-In failed on Mobile Device.\n• Native Error: ${rawNativeMsg}${nativeHint}\n• Web Fallback Error: ${webMsg}`
+        );
+      }
     }
-    const credential = GoogleAuthProvider.credential(idToken);
-    const result = await signInWithCredential(auth, credential);
-    user = result.user;
   } else {
     // 2. Standard Web Sign-In using Browser Popup
     const result = await signInWithPopup(auth, googleProvider);
