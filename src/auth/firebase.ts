@@ -35,7 +35,6 @@ if (Capacitor.isNativePlatform()) {
   try {
     GoogleAuth.initialize({
       clientId: GOOGLE_CLIENT_ID,
-      serverClientId: GOOGLE_CLIENT_ID,
       scopes: ['profile', 'email'],
       grantOfflineAccess: true,
     });
@@ -60,7 +59,6 @@ export async function loginWithGoogle(): Promise<{ user: User; teacher: TeacherP
       try {
         await GoogleAuth.initialize({
           clientId: GOOGLE_CLIENT_ID,
-          serverClientId: GOOGLE_CLIENT_ID,
           scopes: ['profile', 'email'],
           grantOfflineAccess: true,
         });
