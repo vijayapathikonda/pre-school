@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset="utf-8">
+<title>Pragathi Vidyalaya - Teacher & Classroom Mapping Matrix</title>
+<!--[if gte mso 9]>
+<xml>
+ <w:WordDocument>
+  <w:View>Print</w:View>
+  <w:Zoom>100</w:Zoom>
+  <w:DoNotOptimizeForBrowser/>
+ </w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: #1e293b;
+    margin: 40px;
+    line-height: 1.5;
+  }
+  .header-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 25px;
+    border-bottom: 3px solid #4f46e5;
+    padding-bottom: 15px;
+  }
+  .school-title {
+    font-size: 24pt;
+    font-weight: bold;
+    color: #1e1b4b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .school-subtitle {
+    font-size: 11pt;
+    font-weight: bold;
+    color: #d97706;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+  .meta-info {
+    font-size: 9.5pt;
+    color: #64748b;
+    margin-top: 6px;
+  }
+  h2 {
+    font-size: 15pt;
+    color: #312e81;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 6px;
+    margin-top: 30px;
+    margin-bottom: 12px;
+  }
+  table.matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    margin-bottom: 25px;
+    font-size: 10pt;
+  }
+  table.matrix-table th {
+    background-color: #4f46e5;
+    color: #ffffff;
+    font-weight: bold;
+    text-align: left;
+    padding: 10px 12px;
+    border: 1px solid #4338ca;
+  }
+  table.matrix-table td {
+    padding: 9px 12px;
+    border: 1px solid #cbd5e1;
+  }
+  table.matrix-table tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+  .badge-admin {
+    background-color: #dbeafe;
+    color: #1e40af;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 9pt;
+  }
+  .badge-teacher {
+    background-color: #fef3c7;
+    color: #92400e;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 9pt;
+  }
+  .info-box {
+    background-color: #f1f5f9;
+    border-left: 4px solid #4f46e5;
+    padding: 14px 18px;
+    margin-top: 20px;
+    border-radius: 4px;
+    font-size: 10pt;
+  }
+  .info-box h3 {
+    margin-top: 0;
+    color: #1e1b4b;
+    font-size: 11pt;
+  }
+  .footer {
+    margin-top: 40px;
+    padding-top: 15px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 9pt;
+    color: #94a3b8;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+  <!-- School Header -->
+  <table class="header-table">
+    <tr>
+      <td>
+        <div class="school-title">Pragathi Vidyalaya School</div>
+        <div class="school-subtitle">Child Observation & Daily Summary System</div>
+        <div class="meta-info">Authorized Staff & Classroom Mapping Matrix • Turso Database Synchronized</div>
+      </td>
+      <td align="right" valign="top" style="font-size: 9pt; color: #64748b;">
+        <strong>Date Generated:</strong> October 6, 2026<br>
+        <strong>Total Registered Staff:</strong> 18<br>
+        <strong>Total Classrooms:</strong> 12
+      </td>
+    </tr>
+  </table>
+
+  <!-- Section 1: Staff Matrix -->
+  <h2>1. Teacher & Staff Access Matrix (18 Members)</h2>
+  <table class="matrix-table">
+    <thead>
+      <tr>
+        <th style="width: 5%;">#</th>
+        <th style="width: 20%;">Staff Name</th>
+        <th style="width: 30%;">Registered Gmail Address</th>
+        <th style="width: 12%;">Role</th>
+        <th style="width: 33%;">Assigned Classroom / Access Scope</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td><strong>Vijaya Pathikonda</strong></td>
+        <td>vijaya.pathikonda@gmail.com</td>
+        <td><span class="badge-admin">Admin</span></td>
+        <td>All Classes (<code>*</code>) - Full Access</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td><strong>Kavya Y</strong></td>
+        <td>kavyay294@gmail.com</td>
+        <td><span class="badge-admin">Admin</span></td>
+        <td>All Classes (<code>*</code>) - Full Access</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td><strong>Shilpa S</strong></td>
+        <td>shilpaclk1999@gmail.com</td>
+        <td><span class="badge-admin">Admin</span></td>
+        <td>All Classes (<code>*</code>) + Playhome</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td><strong>Manasa T</strong></td>
+        <td>manasamanu399@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>Playhome (<code>playhome</code>)</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td><strong>Swetha R</strong></td>
+        <td>shwethar012@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>Nursery Jnana (<code>nursery_jnana</code>)</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td><strong>Tejashree</strong></td>
+        <td>tejashreekiran21@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>Nursery Satya (<code>nursery_satya</code>)</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td><strong>Anusha</strong></td>
+        <td>anushashamanth09@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>Nursery Shourya (<code>nursery_shourya</code>)</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td><strong>Swathi CN</strong></td>
+        <td>swathinaga2016@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>LKG Jnana (<code>lkg_jnana</code>)</td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td><strong>Bhavana L</strong></td>
+        <td>lbhavana317@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>LKG Jnana (<code>lkg_jnana</code>)</td>
+      </tr>
+      <tr>
+        <td>10</td>
+        <td><strong>Shilpa T</strong></td>
+        <td>shilpavaru10@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>LKG Samriddhi (<code>lkg_samriddhi</code>)</td>
+      </tr>
+      <tr>
+        <td>11</td>
+        <td><strong>Lakshmi Devi</strong></td>
+        <td>lakshmiragavendra1990@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>LKG Satya (<code>lkg_satya</code>)</td>
+      </tr>
+      <tr>
+        <td>12</td>
+        <td><strong>Manasa M</strong></td>
+        <td>manasasunil1998@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>LKG Shourya (<code>lkg_shourya</code>)</td>
+      </tr>
+      <tr>
+        <td>13</td>
+        <td><strong>Aruna E</strong></td>
+        <td>arupruthvi1807@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>UKG Jnana (<code>ukg_jnana</code>)</td>
+      </tr>
+      <tr>
+        <td>14</td>
+        <td><strong>Vijaya (Test)</strong></td>
+        <td>vijaya010590@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>UKG Jnana (<code>ukg_jnana</code>)</td>
+      </tr>
+      <tr>
+        <td>15</td>
+        <td><strong>G Swathi</strong></td>
+        <td>swathigg143@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>UKG Jnana &amp; UKG Samriddhi</td>
+      </tr>
+      <tr>
+        <td>16</td>
+        <td><strong>Nirmala</strong></td>
+        <td>santhoshclk2022@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>UKG Samriddhi (<code>ukg_samriddhi</code>)</td>
+      </tr>
+      <tr>
+        <td>17</td>
+        <td><strong>Shruthi T</strong></td>
+        <td>shruthimanju070@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>UKG Satya (<code>ukg_satya</code>)</td>
+      </tr>
+      <tr>
+        <td>18</td>
+        <td><strong>Ashwini KJ</strong></td>
+        <td>ashwinicharan54@gmail.com</td>
+        <td><span class="badge-teacher">Teacher</span></td>
+        <td>UKG Shourya (<code>ukg_shourya</code>)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Section 2: Classroom Roster -->
+  <h2>2. Classroom Section Roster (12 Sections)</h2>
+  <table class="matrix-table">
+    <thead>
+      <tr>
+        <th style="width: 25%;">Classroom Section</th>
+        <th style="width: 25%;">Classroom ID</th>
+        <th style="width: 50%;">Assigned Teachers &amp; Staff</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Playhome</strong></td>
+        <td><code>playhome</code></td>
+        <td>Manasa T, Shilpa S</td>
+      </tr>
+      <tr>
+        <td><strong>Nursery Jnana</strong></td>
+        <td><code>nursery_jnana</code></td>
+        <td>Swetha R</td>
+      </tr>
+      <tr>
+        <td><strong>Nursery Satya</strong></td>
+        <td><code>nursery_satya</code></td>
+        <td>Tejashree</td>
+      </tr>
+      <tr>
+        <td><strong>Nursery Shourya</strong></td>
+        <td><code>nursery_shourya</code></td>
+        <td>Anusha</td>
+      </tr>
+      <tr>
+        <td><strong>LKG Jnana</strong></td>
+        <td><code>lkg_jnana</code></td>
+        <td>Swathi CN, Bhavana L</td>
+      </tr>
+      <tr>
+        <td><strong>LKG Samriddhi</strong></td>
+        <td><code>lkg_samriddhi</code></td>
+        <td>Shilpa T</td>
+      </tr>
+      <tr>
+        <td><strong>LKG Satya</strong></td>
+        <td><code>lkg_satya</code></td>
+        <td>Lakshmi Devi</td>
+      </tr>
+      <tr>
+        <td><strong>LKG Shourya</strong></td>
+        <td><code>lkg_shourya</code></td>
+        <td>Manasa M</td>
+      </tr>
+      <tr>
+        <td><strong>UKG Jnana</strong></td>
+        <td><code>ukg_jnana</code></td>
+        <td>Aruna E, G Swathi, Vijaya (Test)</td>
+      </tr>
+      <tr>
+        <td><strong>UKG Samriddhi</strong></td>
+        <td><code>ukg_samriddhi</code></td>
+        <td>Nirmala, G Swathi</td>
+      </tr>
+      <tr>
+        <td><strong>UKG Satya</strong></td>
+        <td><code>ukg_satya</code></td>
+        <td>Shruthi T</td>
+      </tr>
+      <tr>
+        <td><strong>UKG Shourya</strong></td>
+        <td><code>ukg_shourya</code></td>
+        <td>Ashwini KJ</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Section 3: Architecture & Security -->
+  <div class="info-box">
+    <h3>3. Security & Control Flow Scoping</h3>
+    <ul>
+      <li><strong>Automatic Classroom Mapping:</strong> Upon logging in with Google on Web or Mobile, teachers are automatically filtered to their designated section.</li>
+      <li><strong>Admin Privileges:</strong> Administrators have permission to view all 12 sections and 266 active student records.</li>
+      <li><strong>Substitute Delegation Mode:</strong> Temporary teacher coverage can be assigned directly in Settings without code or schema changes.</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    Pragathi Vidyalaya School • Child Observation &amp; Daily Summary Portal • Cloud Synchronized Document
+  </div>
+
+</body>
+</html>

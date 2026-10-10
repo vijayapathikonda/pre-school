@@ -303,29 +303,33 @@ export function subscribeToCloudObservations(
   onUpdate: (obs: DailyObservation) => void
 ): () => void {
   let isMounted = true;
-  let lastCheckedTime = new Date().toISOString();
 
-  const pollInterval = setInterval(async () => {
+  const checkCloudUpdates = async () => {
     if (!isMounted) return;
     const turso = getTurso();
     if (!turso) return;
 
     try {
       const res = await turso.execute({
-        sql: 'SELECT * FROM daily_observations WHERE date = ? AND updated_at > ?',
-        args: [date, lastCheckedTime],
+        sql: 'SELECT * FROM daily_observations WHERE date = ?',
+        args: [date],
       });
 
-      if (res.rows.length > 0) {
-        lastCheckedTime = new Date().toISOString();
+      if (res.rows.length > 0 && isMounted) {
         res.rows.forEach((row) => {
           onUpdate(mapRowToObservation(row));
         });
       }
     } catch {
-      // Ignore background polling errors silently
+      // Ignore background polling network glitches silently
     }
-  }, 10000); // Poll every 10 seconds
+  };
+
+  // Run immediate initial check
+  checkCloudUpdates();
+
+  // Poll every 8 seconds for seamless live updates across devices
+  const pollInterval = setInterval(checkCloudUpdates, 8000);
 
   return () => {
     isMounted = false;

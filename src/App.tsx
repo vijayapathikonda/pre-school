@@ -144,6 +144,31 @@ export const App: React.FC = () => {
     loadDateObservations();
   }, [loadDateObservations]);
 
+  // Automatic Background Sync on App Focus, Resume & Internet Reconnect
+  useEffect(() => {
+    if (!ready) return;
+
+    const handleAutoSync = () => {
+      // 1. Push any pending offline observations from this device
+      syncUnsyncedObservations().catch((e) => console.warn('Auto-sync push notice:', e));
+      // 2. Pull latest observations from Turso Cloud for active date
+      loadDateObservations();
+    };
+
+    window.addEventListener('online', handleAutoSync);
+    window.addEventListener('focus', handleAutoSync);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        handleAutoSync();
+      }
+    });
+
+    return () => {
+      window.removeEventListener('online', handleAutoSync);
+      window.removeEventListener('focus', handleAutoSync);
+    };
+  }, [ready, loadDateObservations]);
+
   // Fetch active teacher delegations for selectedDate
   const loadDelegations = useCallback(async () => {
     try {
