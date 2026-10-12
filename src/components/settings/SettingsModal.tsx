@@ -467,6 +467,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       category: holidayCategory,
       description: holidayDesc.trim() || undefined,
       created_by: currentUserName || 'Admin',
+      created_at: new Date().toISOString(),
       createdAt: new Date().toISOString(),
     };
 

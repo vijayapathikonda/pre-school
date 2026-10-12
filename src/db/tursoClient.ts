@@ -558,6 +558,7 @@ export async function fetchAllHolidays(): Promise<SchoolHoliday[]> {
       category: (String(r.category || 'Festival')) as any,
       description: r.description ? String(r.description) : undefined,
       created_by: r.created_by ? String(r.created_by) : undefined,
+      created_at: r.created_at ? String(r.created_at) : undefined,
       createdAt: r.created_at ? String(r.created_at) : undefined,
     }));
   } catch (err) {
@@ -584,7 +585,7 @@ export async function saveHolidayToCloud(
         holiday.category || 'Festival',
         holiday.description?.trim() || null,
         holiday.created_by || 'Admin',
-        holiday.createdAt || new Date().toISOString(),
+        holiday.created_at || holiday.createdAt || new Date().toISOString(),
       ],
     });
     return { success: true };

@@ -35,6 +35,7 @@ export interface SchoolHoliday {
   description?: string;
   created_by?: string;
   created_at?: string;
+  createdAt?: string;
 }
 
 export interface Student {
