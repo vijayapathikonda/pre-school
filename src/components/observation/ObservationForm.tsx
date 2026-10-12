@@ -114,13 +114,41 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
   };
 
   const handleSaveOnly = async () => {
+    const hasAnyObservationData =
+      !!engagement ||
+      !!participation ||
+      !!following ||
+      thinking.length > 0 ||
+      social.length > 0 ||
+      state.length > 0 ||
+      !!interest ||
+      !!interestDetail?.trim() ||
+      !!additionalObservation?.trim();
+
+    if (present && !hasAnyObservationData) {
+      onNotify?.(
+        'Missing Observation',
+        `Please select Engagement or add an observation note for ${student.name} before saving.`,
+        'warning'
+      );
+      return;
+    }
+
     setIsSaving(true);
+    const effectiveEngagement = present
+      ? engagement || (hasAnyObservationData ? 'Mostly engaged' : undefined)
+      : undefined;
+
+    if (!engagement && effectiveEngagement) {
+      setEngagement(effectiveEngagement);
+    }
+
     const observation: DailyObservation = {
       id: initialObservation?.id,
       studentId: student.id,
       date,
       present,
-      engagement: present ? engagement : undefined,
+      engagement: effectiveEngagement,
       participation: present ? participation : undefined,
       following: present ? following : undefined,
       thinking: present ? thinking : [],
@@ -150,13 +178,41 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
   };
 
   const handleSaveAndNext = async () => {
+    const hasAnyObservationData =
+      !!engagement ||
+      !!participation ||
+      !!following ||
+      thinking.length > 0 ||
+      social.length > 0 ||
+      state.length > 0 ||
+      !!interest ||
+      !!interestDetail?.trim() ||
+      !!additionalObservation?.trim();
+
+    if (present && !hasAnyObservationData) {
+      onNotify?.(
+        'Missing Observation',
+        `Please select Engagement or add an observation note for ${student.name} before saving.`,
+        'warning'
+      );
+      return;
+    }
+
     setIsSaving(true);
+    const effectiveEngagement = present
+      ? engagement || (hasAnyObservationData ? 'Mostly engaged' : undefined)
+      : undefined;
+
+    if (!engagement && effectiveEngagement) {
+      setEngagement(effectiveEngagement);
+    }
+
     const observation: DailyObservation = {
       id: initialObservation?.id,
       studentId: student.id,
       date,
       present,
-      engagement: present ? engagement : undefined,
+      engagement: effectiveEngagement,
       participation: present ? participation : undefined,
       following: present ? following : undefined,
       thinking: present ? thinking : [],

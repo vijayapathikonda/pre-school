@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Student, DailyObservation } from '../../types/observation';
+import { Student, DailyObservation, isObservationComplete } from '../../types/observation';
 import { Check, UserX, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface StudentRosterBarProps {
@@ -113,8 +113,8 @@ export const StudentRosterBar: React.FC<StudentRosterBarProps> = ({
             filteredStudents.map((student) => {
               const isSelected = student.id === activeStudentId;
               const obs = observationsMap.get(student.id);
-              const isCompleted = obs && obs.present && !!obs.engagement;
-              const isAbsent = obs && !obs.present;
+              const isCompleted = isObservationComplete(obs) && (obs?.present ?? false);
+              const isAbsent = !!obs && !obs.present;
 
               // Student initials
               const initials = student.name

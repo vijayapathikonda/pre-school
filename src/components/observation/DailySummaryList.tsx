@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Student, DailyObservation, SchoolHoliday } from '../../types/observation';
+import { Student, DailyObservation, SchoolHoliday, isObservationComplete } from '../../types/observation';
 import {
   Check,
   UserX,
@@ -76,7 +76,7 @@ export const DailySummaryList: React.FC<DailySummaryListProps> = ({
 
   const completedStudents = students.filter((s) => {
     const obs = observationsMap.get(s.id);
-    return obs && obs.present && !!obs.engagement;
+    return isObservationComplete(obs) && (obs?.present ?? false);
   });
 
   const absentStudents = students.filter((s) => {
@@ -86,7 +86,7 @@ export const DailySummaryList: React.FC<DailySummaryListProps> = ({
 
   const pendingStudents = students.filter((s) => {
     const obs = observationsMap.get(s.id);
-    return !obs || (obs.present && !obs.engagement);
+    return !isObservationComplete(obs);
   });
 
   const filteredStudents = students.filter((s) => {
@@ -94,9 +94,9 @@ export const DailySummaryList: React.FC<DailySummaryListProps> = ({
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
 
-    if (filter === 'completed') return obs && obs.present && !!obs.engagement;
+    if (filter === 'completed') return isObservationComplete(obs) && (obs?.present ?? false);
     if (filter === 'absent') return obs && !obs.present;
-    if (filter === 'pending') return !obs || (obs.present && !obs.engagement);
+    if (filter === 'pending') return !isObservationComplete(obs);
     return true;
   });
 
@@ -324,8 +324,8 @@ export const DailySummaryList: React.FC<DailySummaryListProps> = ({
           ) : (
             filteredStudents.map((student) => {
               const obs = observationsMap.get(student.id);
-              const isCompleted = obs && obs.present && !!obs.engagement;
-              const isAbsent = obs && !obs.present;
+              const isCompleted = isObservationComplete(obs) && (obs?.present ?? false);
+              const isAbsent = !!obs && !obs.present;
 
               return (
                 <div
@@ -367,7 +367,7 @@ export const DailySummaryList: React.FC<DailySummaryListProps> = ({
                       {/* Snippet */}
                       <p className="text-[11px] text-slate-500 truncate mt-0.5">
                         {isCompleted
-                          ? `${obs?.engagement || ''} • ${obs?.participation || ''} • Mood: ${(obs?.state || []).join(', ') || 'Normal'}`
+                          ? `${obs?.engagement || 'Observed'} • ${obs?.participation || ''} • Mood: ${(obs?.state || []).join(', ') || 'Normal'}`
                           : isAbsent
                           ? 'Marked absent for the day'
                           : 'Observation not yet filled'}

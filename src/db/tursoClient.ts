@@ -126,7 +126,7 @@ export function mapRowToStudent(row: any): Student {
     photoUrl: row.photo_url || undefined,
     avatarColor: row.avatar_color || undefined,
     notes: row.notes || undefined,
-    active: Boolean(row.active ?? true),
+    active: row.active === 0 || row.active === '0' || row.active === false ? false : true,
     createdAt: row.created_at || new Date().toISOString(),
   };
 }
@@ -253,7 +253,16 @@ export async function fetchCloudRoster(): Promise<{ classrooms: Classroom[]; stu
     ]);
 
     const classrooms = cRes.rows.map(mapRowToClassroom);
-    const students = sRes.rows.map(mapRowToStudent);
+    const classMap = new Map(classrooms.map((c) => [c.id, c.name]));
+    
+    // Ensure every student has a valid classroomName even if pulled from a row without it
+    const students = sRes.rows.map((r: any) => {
+      const student = mapRowToStudent(r);
+      if (!student.classroomName && classMap.has(student.classroomId)) {
+        student.classroomName = classMap.get(student.classroomId) || '';
+      }
+      return student;
+    });
 
     if (classrooms.length > 0 || students.length > 0) {
       return { classrooms, students };
@@ -262,6 +271,51 @@ export async function fetchCloudRoster(): Promise<{ classrooms: Classroom[]; stu
   } catch (err) {
     console.warn('Network error fetching cloud roster from Turso:', err);
     return null;
+  }
+}
+
+export async function saveStudentToCloud(
+  student: Student
+): Promise<{ success: boolean; error?: string }> {
+  const turso = getTurso();
+  if (!turso) return { success: false, error: 'Turso client not connected.' };
+
+  try {
+    await turso.execute({
+      sql: `INSERT OR REPLACE INTO students (id, classroom_id, classroom_name, roll_number, name, avatar_color, notes, active, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        student.id,
+        student.classroomId,
+        student.classroomName || null,
+        0,
+        student.name.trim(),
+        student.avatarColor || null,
+        student.notes || null,
+        student.active ? 1 : 0,
+        student.createdAt || new Date().toISOString(),
+      ],
+    });
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to save student to Turso:', err);
+    return { success: false, error: err.message || 'Failed to save student.' };
+  }
+}
+
+export async function deleteStudentFromCloud(id: string): Promise<{ success: boolean; error?: string }> {
+  const turso = getTurso();
+  if (!turso) return { success: false, error: 'Turso client not connected.' };
+
+  try {
+    await turso.execute({
+      sql: `DELETE FROM students WHERE id = ?`,
+      args: [id],
+    });
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to delete student from Turso:', err);
+    return { success: false, error: err.message || 'Failed to delete student.' };
   }
 }
 
@@ -284,12 +338,29 @@ export async function syncRosterToCloud(
 
     for (const s of students) {
       statements.push({
-        sql: `INSERT OR REPLACE INTO students (id, classroom_id, roll_number, name) VALUES (?, ?, ?, ?)`,
-        args: [s.id, s.classroomId, 0, s.name],
+        sql: `INSERT OR REPLACE INTO students (id, classroom_id, classroom_name, roll_number, name, avatar_color, notes, active, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          s.id,
+          s.classroomId,
+          s.classroomName || null,
+          0,
+          s.name.trim(),
+          s.avatarColor || null,
+          s.notes || null,
+          s.active ? 1 : 0,
+          s.createdAt || new Date().toISOString(),
+        ],
       });
     }
 
-    await turso.batch(statements, 'write');
+    // Process in batches of 50 to avoid request payload limits
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < statements.length; i += CHUNK_SIZE) {
+      const chunk = statements.slice(i, i + CHUNK_SIZE);
+      await turso.batch(chunk, 'write');
+    }
+
     return { success: true, count: students.length };
   } catch (err: any) {
     console.error('Bulk roster sync error:', err);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Classroom, Student, DailyObservation, TeacherDelegation, SchoolHoliday } from './types/observation';
+import { Classroom, Student, DailyObservation, TeacherDelegation, SchoolHoliday, isObservationComplete } from './types/observation';
 import { db, initializeDatabase, saveObservation, syncUnsyncedObservations } from './db/schema';
 import { 
   fetchCloudObservations, 
@@ -7,6 +7,7 @@ import {
   subscribeToCloudObservations,
   fetchDelegationsForDate,
   fetchAllHolidays,
+  saveStudentToCloud,
 } from './db/tursoClient';
 import { Header } from './components/layout/Header';
 import { Navigation, TabType } from './components/layout/Navigation';
@@ -93,20 +94,26 @@ export const App: React.FC = () => {
     fetchCloudRoster()
       .then(async (cloudRoster) => {
         if (cloudRoster && cloudRoster.students.length > 0) {
-          await db.classrooms.clear();
           await db.classrooms.bulkPut(cloudRoster.classrooms);
 
           const cloudStudentIds = new Set(cloudRoster.students.map((s) => s.id));
           const localStudents = await db.students.toArray();
-          for (const ls of localStudents) {
-            if (!cloudStudentIds.has(ls.id)) {
-              await db.students.delete(ls.id);
+          const unsyncedStudents = localStudents.filter((ls) => !cloudStudentIds.has(ls.id));
+
+          // If any students were onboarded locally and haven't reached cloud yet, persist them to cloud
+          if (unsyncedStudents.length > 0) {
+            for (const s of unsyncedStudents) {
+              saveStudentToCloud(s).catch((err) =>
+                console.warn('Background student cloud sync notice:', err)
+              );
             }
           }
+
           await db.students.bulkPut(cloudRoster.students);
+          const allMergedStudents = await db.students.filter((s) => s.active).toArray();
 
           setClassrooms(cloudRoster.classrooms);
-          setStudents(cloudRoster.students);
+          setStudents(allMergedStudents);
         }
       })
       .catch((err) => console.warn('Background roster sync notice:', err));
@@ -310,7 +317,7 @@ export const App: React.FC = () => {
   const completedCount = useMemo(() => {
     return classroomStudents.filter((s) => {
       const obs = observationsMap.get(s.id);
-      return obs && (obs.present ? !!obs.engagement : true);
+      return isObservationComplete(obs);
     }).length;
   }, [classroomStudents, observationsMap]);
 
@@ -371,20 +378,25 @@ export const App: React.FC = () => {
       // 2. Fetch latest master roster from cloud
       const cloudRoster = await fetchCloudRoster();
       if (cloudRoster && cloudRoster.students.length > 0) {
-        await db.classrooms.clear();
         await db.classrooms.bulkPut(cloudRoster.classrooms);
 
         const cloudStudentIds = new Set(cloudRoster.students.map((s) => s.id));
         const localStudents = await db.students.toArray();
-        for (const ls of localStudents) {
-          if (!cloudStudentIds.has(ls.id)) {
-            await db.students.delete(ls.id);
+        const unsyncedStudents = localStudents.filter((ls) => !cloudStudentIds.has(ls.id));
+
+        if (unsyncedStudents.length > 0) {
+          for (const s of unsyncedStudents) {
+            saveStudentToCloud(s).catch((err) =>
+              console.warn('Manual sync student upload notice:', err)
+            );
           }
         }
+
         await db.students.bulkPut(cloudRoster.students);
+        const allMergedStudents = await db.students.filter((s) => s.active).toArray();
 
         setClassrooms(cloudRoster.classrooms);
-        setStudents(cloudRoster.students);
+        setStudents(allMergedStudents);
       }
 
       // 3. Fetch observations for currently selected date
@@ -577,6 +589,7 @@ export const App: React.FC = () => {
                 : classrooms.filter((c) => effectiveAssignedClasses.includes(c.id))
             }
             selectedClassroomId={selectedClassroomId}
+            onClassroomChange={handleClassroomChange}
             onRefreshRoster={loadData}
             isAdmin={currentUser.role === 'admin'}
           />

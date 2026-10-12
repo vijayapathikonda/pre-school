@@ -3,6 +3,7 @@ import { Student, Classroom } from '../../types/observation';
 import { db, resetToPragathiRoster } from '../../db/schema';
 import { ExcelImportModal } from './ExcelImportModal';
 import { downloadFile } from '../../db/exportImport';
+import { saveStudentToCloud, deleteStudentFromCloud } from '../../db/tursoClient';
 import * as XLSX from 'xlsx';
 import {
   UserPlus,
@@ -19,6 +20,7 @@ interface StudentListProps {
   students: Student[];
   classrooms: Classroom[];
   selectedClassroomId: string;
+  onClassroomChange?: (id: string) => void;
   onRefreshRoster: () => void;
   isAdmin: boolean;
 }
@@ -27,6 +29,7 @@ export const StudentList: React.FC<StudentListProps> = ({
   students,
   classrooms,
   selectedClassroomId,
+  onClassroomChange,
   onRefreshRoster,
   isAdmin,
 }) => {
@@ -66,7 +69,7 @@ export const StudentList: React.FC<StudentListProps> = ({
 
     const classroom = classrooms.find((c) => c.id === newClassroomId) || classrooms[0];
     const newStudent: Student = {
-      id: `std_${Date.now()}`,
+      id: `std_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       name: newStudentName.trim(),
       classroomId: classroom.id,
       classroomName: classroom.name,
@@ -76,18 +79,38 @@ export const StudentList: React.FC<StudentListProps> = ({
       createdAt: new Date().toISOString(),
     };
 
-    await db.students.add(newStudent);
+    // 1. Put into local Dexie store
+    await db.students.put(newStudent);
+
+    // 2. Persist directly to Turso Cloud
+    try {
+      await saveStudentToCloud(newStudent);
+    } catch (err) {
+      console.warn('Turso save error:', err);
+    }
+
     setShowAddModal(false);
     setNewStudentName('');
     setNewNotes('');
+
+    // 3. Switch active view to the classroom where student was enrolled
+    if (onClassroomChange) {
+      onClassroomChange(classroom.id);
+    }
+
     onRefreshRoster();
     setMessage(`Successfully onboarded ${newStudent.name} into ${classroom.name}!`);
-    setTimeout(() => setMessage(null), 3000);
+    setTimeout(() => setMessage(null), 3500);
   };
 
   const handleDeleteStudent = async (id: string, name: string) => {
     if (confirm(`Remove student "${name}" from roster?`)) {
       await db.students.delete(id);
+      try {
+        await deleteStudentFromCloud(id);
+      } catch (err) {
+        console.warn('Turso delete error:', err);
+      }
       onRefreshRoster();
       setMessage(`Removed ${name} from roster.`);
       setTimeout(() => setMessage(null), 2500);
@@ -109,7 +132,7 @@ export const StudentList: React.FC<StudentListProps> = ({
       ['Student Name', 'Class Name', 'Notes'],
       ['Charvik', 'Nursery Jnana', 'Enjoys outdoor sand play'],
       ['Gharshith gurram', 'Nursery Satya', 'Loves story circles'],
-      ['Haripriya', 'Nursery Shaurya', 'Helpful and friendly with peers'],
+      ['Haripriya', 'Nursery Shourya', 'Helpful and friendly with peers'],
       ['Aarav Reddy', 'Nursery Jnana', 'Allergic to peanuts'],
       ['Sahasra siri', 'Nursery Satya', 'Enjoys drawing watercolors']
     ];
@@ -178,6 +201,55 @@ export const StudentList: React.FC<StudentListProps> = ({
         )}
       </div>
 
+      {/* Classroom Filter Pills */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-3">
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => onClassroomChange && onClassroomChange('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors flex items-center space-x-1.5 ${
+              selectedClassroomId === 'ALL'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <span>All Classes</span>
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                selectedClassroomId === 'ALL' ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {students.length}
+            </span>
+          </button>
+        )}
+        {classrooms.map((c) => {
+          const count = students.filter((s) => s.classroomId === c.id).length;
+          const isSelected = selectedClassroomId === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onClassroomChange && onClassroomChange(c.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors flex items-center space-x-1.5 ${
+                isSelected
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <span>{c.name}</span>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                  isSelected ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Action Controls & Single Student Onboard */}
       <div className="bg-white rounded-xl border border-slate-200 p-3 mb-4 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="relative flex-1">
@@ -195,11 +267,13 @@ export const StudentList: React.FC<StudentListProps> = ({
           <button
             onClick={() => {
               setNewClassroomId(
-                classrooms.find((c) => c.id === selectedClassroomId)?.id || classrooms[0]?.id || ''
+                selectedClassroomId !== 'ALL' && classrooms.some((c) => c.id === selectedClassroomId)
+                  ? selectedClassroomId
+                  : classrooms[0]?.id || ''
               );
               setShowAddModal(true);
             }}
-            className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center space-x-1.5 shadow-xs transition-colors"
+            className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center justify-center space-x-1.5 shadow-xs transition-colors shrink-0"
           >
             <UserPlus className="w-4 h-4" />
             <span>Onboard New Student</span>
@@ -212,7 +286,12 @@ export const StudentList: React.FC<StudentListProps> = ({
         <div className="divide-y divide-slate-100">
           {filtered.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs">
-              No students found for this view.
+              <p className="font-semibold text-slate-600 mb-1">No students found for this view.</p>
+              <p className="text-[11px] text-slate-400">
+                {selectedClassroomId === 'ALL'
+                  ? 'No students enrolled across any classroom.'
+                  : `No students enrolled in ${classrooms.find((c) => c.id === selectedClassroomId)?.name || 'this class'} yet.`}
+              </p>
             </div>
           ) : (
             filtered.map((student, idx) => (

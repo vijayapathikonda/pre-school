@@ -109,10 +109,36 @@ export async function importStudentsFromRows(
   rows: Array<{ name: string; className: string; notes?: string }>
 ): Promise<{ added: number; classroomsAdded: number }> {
   const currentClassrooms = await db.classrooms.toArray();
-  const classMap = new Map<string, Classroom>();
-  currentClassrooms.forEach((c) => {
-    classMap.set(c.name.toLowerCase().trim(), c);
-  });
+
+  const normalizeClassKey = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/shaurya/g, 'shourya')
+      .replace(/play\s*home/g, 'playhome')
+      .replace(/[^a-z0-9]/g, '');
+
+  const findClassroom = (rawClassName: string): Classroom | undefined => {
+    const rawLower = rawClassName.toLowerCase().trim();
+    const normalized = normalizeClassKey(rawClassName);
+
+    // 1. Direct name or ID match
+    let found = currentClassrooms.find(
+      (c) => c.name.toLowerCase().trim() === rawLower || c.id.toLowerCase().trim() === rawLower
+    );
+    if (found) return found;
+
+    // 2. Normalized key match (e.g. "Nursery Shaurya" -> "nurseryshourya")
+    found = currentClassrooms.find(
+      (c) => normalizeClassKey(c.name) === normalized || normalizeClassKey(c.id) === normalized
+    );
+    if (found) return found;
+
+    // 3. Substring match (e.g. "Jnana" matching "Nursery Jnana")
+    found = currentClassrooms.find((c) =>
+      c.name.toLowerCase().includes(rawLower) || rawLower.includes(c.name.toLowerCase())
+    );
+    return found;
+  };
 
   let classroomsAddedCount = 0;
   const newStudents: Student[] = [];
@@ -136,18 +162,17 @@ export async function importStudentsFromRows(
     if (!trimmedName) continue;
 
     const rawClassName = (row.className || 'General').trim();
-    const classKey = rawClassName.toLowerCase();
+    let classroom = findClassroom(rawClassName);
 
-    let classroom = classMap.get(classKey);
     if (!classroom) {
-      // Create classroom dynamically if it does not exist
+      // Create classroom dynamically if it really does not exist
       const newClass: Classroom = {
         id: `c_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
         name: rawClassName,
         ageGroup: 'Preschool'
       };
       await db.classrooms.add(newClass);
-      classMap.set(classKey, newClass);
+      currentClassrooms.push(newClass);
       classroom = newClass;
       classroomsAddedCount++;
     }
@@ -168,9 +193,11 @@ export async function importStudentsFromRows(
     await db.students.bulkAdd(newStudents);
     const allClassrooms = await db.classrooms.toArray();
     const allStudents = await db.students.toArray();
-    syncRosterToCloud(allClassrooms, allStudents).catch((err) =>
-      console.warn('Background sync after import:', err)
-    );
+    try {
+      await syncRosterToCloud(allClassrooms, allStudents);
+    } catch (err) {
+      console.warn('Sync roster to cloud notice after import:', err);
+    }
   }
 
   return { added: newStudents.length, classroomsAdded: classroomsAddedCount };

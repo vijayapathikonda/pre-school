@@ -47,7 +47,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
       ['Student Name', 'Class Name', 'Notes'],
       ['Aarav Reddy', 'Nursery Jnana', 'Enjoys outdoor sand play'],
       ['Diya Sharma', 'Nursery Satya', 'Loves story circles'],
-      ['Kavya Nair', 'Nursery Shaurya', 'Quiet and observant'],
+      ['Kavya Nair', 'Nursery Shourya', 'Quiet and observant'],
       ['Vivaan Patel', 'Nursery Jnana', 'Allergic to milk'],
       ['Anvi Rao', 'Nursery Satya', 'Very helpful with peers']
     ];

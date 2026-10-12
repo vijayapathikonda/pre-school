@@ -189,3 +189,24 @@ export const INTEREST_OPTIONS: InterestOption[] = [
   'Noticeably less interest',
   'Not observed'
 ];
+
+/**
+ * Checks whether an observation is completed.
+ * - Absent students (!present) are considered completed.
+ * - Present students are completed if engagement is recorded,
+ *   OR if any observation dimensions/notes are recorded.
+ */
+export function isObservationComplete(obs?: DailyObservation | null): boolean {
+  if (!obs) return false;
+  if (!obs.present) return true; // Marked absent is complete
+  return !!(
+    obs.engagement ||
+    obs.participation ||
+    obs.following ||
+    (obs.thinking && obs.thinking.length > 0) ||
+    (obs.social && obs.social.length > 0) ||
+    (obs.state && obs.state.length > 0) ||
+    obs.interest ||
+    (obs.additionalObservation && obs.additionalObservation.trim().length > 0)
+  );
+}
