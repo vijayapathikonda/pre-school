@@ -52,9 +52,11 @@ jobs:
         chmod +x gradlew
         ./gradlew assembleDebug
 
-    - name: Rename APK to School Name
+    - name: Prepare APK Files
       run: |
+        VERSION="v1.0.${{ github.run_number }}"
         cp android/app/build/outputs/apk/debug/app-debug.apk Pragathi-Vidyalaya-School.apk
+        cp android/app/build/outputs/apk/debug/app-debug.apk "Pragathi-Vidyalaya-School-${VERSION}.apk"
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
@@ -62,13 +64,32 @@ jobs:
         name: Pragathi-Vidyalaya-School-APK
         path: Pragathi-Vidyalaya-School.apk
 
-    - name: Publish Direct Download to GitHub Releases
+    - name: Publish Versioned Archive Release
+      uses: softprops/action-gh-release@v2
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/turso-firebase'
+      with:
+        tag_name: "v1.0.${{ github.run_number }}"
+        name: "Pragathi Vidyalaya School v1.0.${{ github.run_number }}"
+        body: |
+          ### Pragathi Vidyalaya School - Build ${{ github.run_number }}
+          - **Commit**: `${{ github.sha }}`
+          - **Branch**: `${{ github.ref_name }}`
+          
+          Download the versioned APK below or access the permanent QR code download under `latest`.
+        files: "Pragathi-Vidyalaya-School-v1.0.${{ github.run_number }}.apk"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update 'latest' Release for QR Code & Direct Link
       uses: softprops/action-gh-release@v2
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/turso-firebase'
       with:
         tag_name: latest
-        name: "Pragathi Vidyalaya School Mobile APK"
-        body: "Latest Android APK for Pragathi Vidyalaya School Daily Child Observation Portal."
+        name: "Pragathi Vidyalaya School Mobile APK (Latest)"
+        body: |
+          ### Pragathi Vidyalaya School — Latest Release
+          - **Latest Version**: `v1.0.${{ github.run_number }}`
+          - Permanent download link for Teachers and QR Code scanning.
         files: Pragathi-Vidyalaya-School.apk
         make_latest: true
       env:
