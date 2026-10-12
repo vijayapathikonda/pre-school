@@ -15,7 +15,8 @@ import {
   ThinkingOption,
   SocialOption,
   StateOption,
-  InterestOption
+  InterestOption,
+  SchoolHoliday
 } from '../../types/observation';
 import {
   Check,
@@ -26,7 +27,8 @@ import {
   AlertCircle,
   Save,
   MessageSquare,
-  Loader2
+  Loader2,
+  CalendarOff
 } from 'lucide-react';
 import { generateDailyObservationPDF } from '../reports/pdfGenerator';
 import { shareViaWhatsApp } from '../../utils/whatsappShare';
@@ -42,6 +44,8 @@ interface ObservationFormProps {
   hasPrev: boolean;
   schoolName: string;
   onNotify?: (title: string, message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
+  activeHoliday?: SchoolHoliday;
+  isSunday?: boolean;
 }
 
 export const ObservationForm: React.FC<ObservationFormProps> = ({
@@ -55,6 +59,8 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
   hasPrev,
   schoolName,
   onNotify,
+  activeHoliday,
+  isSunday = false,
 }) => {
   const [present, setPresent] = useState<boolean>(initialObservation?.present ?? true);
   const [engagement, setEngagement] = useState<EngagementOption | undefined>(initialObservation?.engagement);
@@ -216,6 +222,37 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 pb-28">
+      {/* Non-Working Day Notice */}
+      {(activeHoliday || isSunday) && (
+        <div
+          className={`p-3 rounded-xl border mb-3.5 flex items-center space-x-2.5 text-xs shadow-2xs ${
+            activeHoliday
+              ? 'bg-rose-50 border-rose-200 text-rose-900'
+              : 'bg-amber-50 border-amber-200 text-amber-900'
+          }`}
+        >
+          <CalendarOff
+            className={`w-4 h-4 shrink-0 ${
+              activeHoliday ? 'text-rose-600' : 'text-amber-600'
+            }`}
+          />
+          <span className="leading-snug">
+            <strong>Non-Working Day:</strong>{' '}
+            {activeHoliday ? (
+              <>
+                Today ({date}) is a scheduled School Holiday (
+                <strong>{activeHoliday.name}</strong> — {activeHoliday.category}
+                ). Recording observation entries for holidays is optional.
+              </>
+            ) : (
+              <>
+                Today ({date}) is a Sunday (Weekend). Daily classroom observations are not required.
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
       {/* Student Identity Card */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-4">
         <div className="flex items-center justify-between">

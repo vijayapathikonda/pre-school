@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Classroom, Student, DailyObservation, TeacherDelegation } from './types/observation';
+import { Classroom, Student, DailyObservation, TeacherDelegation, SchoolHoliday } from './types/observation';
 import { db, initializeDatabase, saveObservation, syncUnsyncedObservations } from './db/schema';
 import { 
   fetchCloudObservations, 
   fetchCloudRoster, 
   subscribeToCloudObservations,
   fetchDelegationsForDate,
+  fetchAllHolidays,
 } from './db/tursoClient';
 import { Header } from './components/layout/Header';
 import { Navigation, TabType } from './components/layout/Navigation';
@@ -44,7 +45,8 @@ export const App: React.FC = () => {
   const [activeStudentId, setActiveStudentId] = useState<string>('');
   const [observations, setObservations] = useState<DailyObservation[]>([]);
   const [delegations, setDelegations] = useState<TeacherDelegation[]>([]);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'cloud' | 'staff' | 'substitutes'>('cloud');
+  const [holidays, setHolidays] = useState<SchoolHoliday[]>([]);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'cloud' | 'staff' | 'substitutes' | 'holidays'>('cloud');
   const [schoolName, setSchoolName] = useState<string>('Pragathi Vidyalaya School');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -183,6 +185,28 @@ export const App: React.FC = () => {
     loadDelegations();
   }, [loadDelegations]);
 
+  // Fetch school holidays from Dexie local cache and Turso Cloud
+  const loadHolidays = useCallback(async () => {
+    try {
+      const localHols = await db.holidays.toArray();
+      if (localHols && localHols.length > 0) {
+        setHolidays(localHols);
+      }
+      const cloudHols = await fetchAllHolidays();
+      if (cloudHols && cloudHols.length >= 0) {
+        await db.holidays.clear();
+        await db.holidays.bulkPut(cloudHols);
+        setHolidays(cloudHols);
+      }
+    } catch (err) {
+      console.warn('Could not load school holidays:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHolidays();
+  }, [loadHolidays]);
+
   // Subscribe to real-time changes on daily_observations for active date
   useEffect(() => {
     if (!ready) return;
@@ -300,6 +324,19 @@ export const App: React.FC = () => {
     return observationsMap.get(activeStudent.id);
   }, [activeStudent, observationsMap]);
 
+  // Sunday detection (0 = Sunday in JS Date)
+  const isSunday = useMemo(() => {
+    if (!selectedDate) return false;
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    return dateObj.getDay() === 0;
+  }, [selectedDate]);
+
+  // Active School Holiday for selectedDate
+  const activeHoliday = useMemo(() => {
+    return holidays.find((h) => h.date === selectedDate);
+  }, [holidays, selectedDate]);
+
   // Student navigation within current classroom
   const currentIndex = classroomStudents.findIndex((s) => s.id === activeStudent?.id);
   const hasPrev = currentIndex > 0;
@@ -359,6 +396,9 @@ export const App: React.FC = () => {
       }
       const updatedRecords = await db.observations.where('date').equals(selectedDate).toArray();
       setObservations(updatedRecords);
+
+      // 4. Fetch latest school holidays
+      await loadHolidays();
 
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setLastSyncTime(timeStr);
@@ -441,6 +481,10 @@ export const App: React.FC = () => {
           setSettingsInitialTab('substitutes');
           setIsSettingsOpen(true);
         }}
+        onOpenHolidays={() => {
+          setSettingsInitialTab('holidays');
+          setIsSettingsOpen(true);
+        }}
         schoolName={schoolName}
         totalStudents={students.length}
         currentUser={currentUser}
@@ -450,6 +494,8 @@ export const App: React.FC = () => {
         lastSyncTime={lastSyncTime}
         activeDelegations={delegations}
         effectiveAssignedClasses={effectiveAssignedClasses}
+        activeHoliday={activeHoliday}
+        isSunday={isSunday}
       />
 
       {/* Main View Area */}
@@ -494,6 +540,8 @@ export const App: React.FC = () => {
                 hasPrev={hasPrev}
                 schoolName={schoolName}
                 onNotify={showToast}
+                activeHoliday={activeHoliday}
+                isSunday={isSunday}
               />
             ) : (
               <div className="p-12 text-center text-slate-400 text-sm">
@@ -515,6 +563,8 @@ export const App: React.FC = () => {
             }}
             schoolName={schoolName}
             onNotify={showToast}
+            activeHoliday={activeHoliday}
+            isSunday={isSunday}
           />
         )}
 
@@ -566,6 +616,7 @@ export const App: React.FC = () => {
         initialTab={settingsInitialTab}
         currentUserName={currentUser.username}
         onDelegationsUpdated={loadDelegations}
+        onHolidaysUpdated={loadHolidays}
       />
 
       {/* Global Toast Notification Prompt */}

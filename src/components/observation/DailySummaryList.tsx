@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Student, DailyObservation } from '../../types/observation';
+import { Student, DailyObservation, SchoolHoliday } from '../../types/observation';
 import {
   Check,
   UserX,
@@ -10,6 +10,7 @@ import {
   Search,
   ArrowRight,
   Calendar,
+  CalendarOff,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -25,6 +26,8 @@ interface DailySummaryListProps {
   onSelectStudent: (studentId: string) => void;
   schoolName: string;
   onNotify?: (title: string, message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
+  activeHoliday?: SchoolHoliday;
+  isSunday?: boolean;
 }
 
 export const DailySummaryList: React.FC<DailySummaryListProps> = ({
@@ -35,6 +38,8 @@ export const DailySummaryList: React.FC<DailySummaryListProps> = ({
   onSelectStudent,
   schoolName,
   onNotify,
+  activeHoliday,
+  isSunday = false,
 }) => {
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending' | 'absent'>('all');
   const [search, setSearch] = useState('');
@@ -169,6 +174,62 @@ export const DailySummaryList: React.FC<DailySummaryListProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Non-Working Day / Holiday Notice */}
+      {(activeHoliday || isSunday) && (
+        <div
+          className={`mb-4 p-4 rounded-2xl border flex items-start space-x-3.5 shadow-2xs ${
+            activeHoliday
+              ? 'bg-rose-50/90 border-rose-200 text-rose-950'
+              : 'bg-amber-50/90 border-amber-200 text-amber-950'
+          }`}
+        >
+          <div
+            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs ${
+              activeHoliday ? 'bg-rose-200 text-rose-800' : 'bg-amber-200 text-amber-800'
+            }`}
+          >
+            <CalendarOff className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="text-xs font-black tracking-wide uppercase">
+                {activeHoliday
+                  ? `School Holiday: ${activeHoliday.name}`
+                  : 'Sunday — Weekly School Holiday'}
+              </h4>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                  activeHoliday
+                    ? 'bg-rose-100 text-rose-800 border-rose-300'
+                    : 'bg-amber-100 text-amber-800 border-amber-300'
+                }`}
+              >
+                {activeHoliday ? activeHoliday.category : 'Weekend'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-700 mt-1 leading-relaxed">
+              {activeHoliday ? (
+                <>
+                  This date has been marked as a school holiday ({activeHoliday.category}).
+                  Daily classroom observations are <strong>not required</strong> for this date, and pending records are expected.
+                  {activeHoliday.description && (
+                    <span className="block mt-1 italic font-medium text-slate-800">
+                      Reason / Note: {activeHoliday.description}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  Sunday is an official weekly holiday for Pragathi Vidyalaya School.
+                  Daily student observations are <strong>not required</strong> on Sundays.
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Overview Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <div

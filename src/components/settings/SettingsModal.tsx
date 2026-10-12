@@ -15,6 +15,7 @@ import {
   Search,
   Shield,
   CalendarCheck,
+  CalendarOff,
   UserCheck,
 } from 'lucide-react';
 import {
@@ -29,11 +30,14 @@ import {
   fetchDelegationsForDate,
   saveTeacherDelegation,
   deleteTeacherDelegation,
+  fetchAllHolidays,
+  saveHolidayToCloud,
+  deleteHolidayFromCloud,
   StaffRecord,
 } from '../../db/tursoClient';
 import { db } from '../../db/schema';
 import { exportAllDataAsJSON, importDataFromJSON, downloadFile } from '../../db/exportImport';
-import { Classroom, TeacherDelegation } from '../../types/observation';
+import { Classroom, TeacherDelegation, SchoolHoliday, HolidayCategory } from '../../types/observation';
 import { REAL_CLASSROOMS } from '../../db/sampleData';
 
 interface SettingsModalProps {
@@ -44,9 +48,10 @@ interface SettingsModalProps {
   onDataImported: () => void;
   classrooms?: Classroom[];
   selectedDate?: string;
-  initialTab?: 'cloud' | 'staff' | 'substitutes';
+  initialTab?: 'cloud' | 'staff' | 'substitutes' | 'holidays';
   currentUserName?: string;
   onDelegationsUpdated?: () => void;
+  onHolidaysUpdated?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -60,9 +65,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   initialTab = 'cloud',
   currentUserName = 'Admin',
   onDelegationsUpdated,
+  onHolidaysUpdated,
 }) => {
   const creds = getTursoCredentials();
-  const [activeTab, setActiveTab] = useState<'cloud' | 'staff' | 'substitutes'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'cloud' | 'staff' | 'substitutes' | 'holidays'>(initialTab);
   const [tursoUrl, setTursoUrl] = useState(creds.url);
   const [tursoToken, setTursoToken] = useState(creds.token);
   const [currentSchoolName, setCurrentSchoolName] = useState(schoolName);
@@ -96,6 +102,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [delSubmitting, setDelSubmitting] = useState(false);
   const [delMessage, setDelMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  // Holidays State
+  const [holidaysList, setHolidaysList] = useState<SchoolHoliday[]>([]);
+  const [holidaysLoading, setHolidaysLoading] = useState(false);
+  const [holidayDate, setHolidayDate] = useState(selectedDate || todayStr);
+  const [holidayName, setHolidayName] = useState('');
+  const [holidayCategory, setHolidayCategory] = useState<HolidayCategory>('Festival');
+  const [holidayDesc, setHolidayDesc] = useState('');
+  const [holidaySubmitting, setHolidaySubmitting] = useState(false);
+  const [holidayMessage, setHolidayMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
   const availableClassrooms = classrooms.length > 0 ? classrooms : REAL_CLASSROOMS;
 
   // Sync tab with initialTab when opened
@@ -109,6 +125,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (selectedDate) {
       setDelegationDate(selectedDate);
+      setHolidayDate(selectedDate);
     }
   }, [selectedDate]);
 
@@ -136,10 +153,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const loadHolidays = async () => {
+    setHolidaysLoading(true);
+    try {
+      const records = await fetchAllHolidays();
+      setHolidaysList(records);
+    } catch (err) {
+      console.error('Failed to load holidays:', err);
+    } finally {
+      setHolidaysLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       loadStaff();
       loadDelegations(delegationDate);
+      loadHolidays();
     }
   }, [isOpen, delegationDate]);
 
@@ -419,6 +449,59 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  // Holiday Handlers
+  const handleSaveHoliday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!holidayDate || !holidayName.trim()) {
+      setHolidayMessage({ text: 'Please enter both the date and holiday name.', type: 'error' });
+      return;
+    }
+
+    setHolidaySubmitting(true);
+    setHolidayMessage(null);
+
+    const holiday: SchoolHoliday = {
+      id: `hol_${holidayDate}_${Date.now()}`,
+      date: holidayDate,
+      name: holidayName.trim(),
+      category: holidayCategory,
+      description: holidayDesc.trim() || undefined,
+      created_by: currentUserName || 'Admin',
+      createdAt: new Date().toISOString(),
+    };
+
+    const res = await saveHolidayToCloud(holiday);
+    setHolidaySubmitting(false);
+
+    if (res.success) {
+      setHolidayMessage({
+        text: `🎉 Successfully marked "${holiday.name}" on ${holidayDate} as a School Holiday!`,
+        type: 'success',
+      });
+      setHolidayName('');
+      setHolidayDesc('');
+      await loadHolidays();
+      onHolidaysUpdated?.();
+    } else {
+      setHolidayMessage({ text: `Failed to save holiday: ${res.error}`, type: 'error' });
+    }
+  };
+
+  const handleDeleteHoliday = async (hol: SchoolHoliday) => {
+    if (!confirm(`Remove "${hol.name}" on ${hol.date} from the school holiday calendar?`)) {
+      return;
+    }
+
+    const res = await deleteHolidayFromCloud(hol.id);
+    if (res.success) {
+      setHolidayMessage({ text: `Removed holiday: ${hol.name}`, type: 'success' });
+      await loadHolidays();
+      onHolidaysUpdated?.();
+    } else {
+      setHolidayMessage({ text: `Failed to remove holiday: ${res.error}`, type: 'error' });
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden my-6">
@@ -486,6 +569,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {delegationsList.length > 0 && (
               <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
                 {delegationsList.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('holidays')}
+            className={`flex items-center space-x-2 py-2.5 px-3.5 text-xs font-bold border-b-2 shrink-0 transition-all ${
+              activeTab === 'holidays'
+                ? 'border-indigo-600 text-indigo-700 bg-white rounded-t-lg shadow-2xs'
+                : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <CalendarOff className="w-4 h-4" />
+            <span>Holidays & Closures</span>
+            {holidaysList.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white">
+                {holidaysList.length}
               </span>
             )}
           </button>
@@ -1076,6 +1177,194 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </button>
                 </div>
               </form>
+            </div>
+          )}
+
+          {/* TAB 4: SCHOOL HOLIDAYS & NON-WORKING DAYS */}
+          {activeTab === 'holidays' && (
+            <div className="space-y-4">
+              {/* Intro Banner */}
+              <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-start space-x-3">
+                <CalendarOff className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-extrabold text-rose-950 uppercase tracking-wide">
+                    School Holidays, Festivals & Closures
+                  </h4>
+                  <p className="text-[11px] text-rose-900 leading-tight mt-0.5">
+                    Mark festival holidays, staff training days, and school closures. These dates will automatically be flagged for all teachers and daily observations will not be required.
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Message */}
+              {holidayMessage && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-start space-x-2 ${
+                    holidayMessage.type === 'success'
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
+                      : 'bg-rose-50 border border-rose-200 text-rose-900'
+                  }`}
+                >
+                  {holidayMessage.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <span>{holidayMessage.text}</span>
+                </div>
+              )}
+
+              {/* Add Holiday Form */}
+              <form
+                onSubmit={handleSaveHoliday}
+                className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3"
+              >
+                <div className="flex items-center space-x-2 border-b border-slate-200 pb-2">
+                  <CalendarOff className="w-4 h-4 text-rose-600" />
+                  <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                    Mark Date as School Holiday / Non-Working Day
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                      Date *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={holidayDate}
+                      onChange={(e) => setHolidayDate(e.target.value)}
+                      className="w-full text-xs font-semibold px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                      Holiday / Event Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Diwali, Staff Training, Ayudha Puja"
+                      value={holidayName}
+                      onChange={(e) => setHolidayName(e.target.value)}
+                      className="w-full text-xs font-semibold px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                      Category
+                    </label>
+                    <select
+                      value={holidayCategory}
+                      onChange={(e) => setHolidayCategory(e.target.value as HolidayCategory)}
+                      className="w-full text-xs font-semibold px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="Festival">🪔 Festival Holiday</option>
+                      <option value="Staff Training">📚 Staff Training / Workshop</option>
+                      <option value="School Event">🏫 School Event / Sports Day</option>
+                      <option value="Emergency Closure">⚠️ Emergency / Weather Closure</option>
+                      <option value="Other">📌 Other Non-Working Day</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                    Notes / Circular Details (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. School closed for all preschool sections; resumes on Monday"
+                    value={holidayDesc}
+                    onChange={(e) => setHolidayDesc(e.target.value)}
+                    className="w-full text-xs px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={holidaySubmitting || !holidayDate || !holidayName.trim()}
+                    className="px-4 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors shadow-xs disabled:opacity-50 flex items-center space-x-1.5"
+                  >
+                    <CalendarOff className="w-3.5 h-3.5" />
+                    <span>
+                      {holidaySubmitting ? 'Saving Holiday...' : 'Mark as School Holiday'}
+                    </span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Holidays Directory List */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700 px-1">
+                  <span>Marked School Holidays & Closures ({holidaysList.length})</span>
+                  {holidaysLoading && <span className="text-slate-400 font-normal">Refreshing...</span>}
+                </div>
+
+                {holidaysList.length === 0 ? (
+                  <div className="p-4 text-center bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
+                    No holidays or special closures recorded yet. Use the form above to declare festival holidays or staff training days.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {holidaysList.map((hol) => {
+                      const badgeColor =
+                        hol.category === 'Festival'
+                          ? 'bg-amber-100 text-amber-900 border-amber-300'
+                          : hol.category === 'Staff Training'
+                          ? 'bg-indigo-100 text-indigo-900 border-indigo-300'
+                          : hol.category === 'Emergency Closure'
+                          ? 'bg-rose-100 text-rose-900 border-rose-300'
+                          : 'bg-slate-100 text-slate-900 border-slate-300';
+
+                      return (
+                        <div
+                          key={hol.id}
+                          className="p-3 bg-white border border-slate-200 hover:border-slate-300 rounded-xl shadow-2xs flex items-center justify-between gap-2"
+                        >
+                          <div className="flex items-center space-x-3 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-700 border border-rose-200 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                              <CalendarOff className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center space-x-2">
+                                <p className="text-xs font-bold text-slate-900 truncate">
+                                  {hol.name}
+                                </p>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeColor}`}>
+                                  {hol.category}
+                                </span>
+                              </div>
+                              <p className="text-[11px] font-mono text-slate-600 truncate mt-0.5">
+                                📅 {hol.date}
+                              </p>
+                              {hol.description && (
+                                <p className="text-[10px] text-slate-500 italic truncate mt-0.5">
+                                  {hol.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteHoliday(hol)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                            title="Delete holiday"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

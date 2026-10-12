@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Student, DailyObservation, Classroom } from '../types/observation';
+import { Student, DailyObservation, Classroom, SchoolHoliday } from '../types/observation';
 import { REAL_CLASSROOMS, REAL_STUDENTS } from './sampleData';
 import { syncObservationToCloud, syncRosterToCloud, fetchCloudRoster } from './tursoClient';
 
@@ -13,14 +13,16 @@ export class PreschoolDatabase extends Dexie {
   students!: Table<Student, string>;
   observations!: Table<DailyObservation, string>;
   settings!: Table<AppSetting, string>;
+  holidays!: Table<SchoolHoliday, string>;
 
   constructor() {
     super('PreschoolObsDB');
-    this.version(4).stores({
+    this.version(5).stores({
       classrooms: 'id, name, ageGroup',
       students: 'id, name, classroomId, classroomName, active, createdAt',
       observations: '++id, studentId, date, [studentId+date], present, recordedAt',
-      settings: 'key'
+      settings: 'key',
+      holidays: 'id, date, category'
     });
   }
 }

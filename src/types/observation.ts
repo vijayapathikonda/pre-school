@@ -20,6 +20,23 @@ export interface TeacherDelegation {
   created_at?: string;
 }
 
+export type HolidayCategory =
+  | 'Festival'
+  | 'Staff Training'
+  | 'School Event'
+  | 'Emergency Closure'
+  | 'Other';
+
+export interface SchoolHoliday {
+  id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+  category: HolidayCategory;
+  description?: string;
+  created_by?: string;
+  created_at?: string;
+}
+
 export interface Student {
   id: string;
   name: string;

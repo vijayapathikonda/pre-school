@@ -1,6 +1,6 @@
 import React from 'react';
-import { Classroom, TeacherDelegation } from '../../types/observation';
-import { Calendar, Settings, Users, Shield, UserCheck, LogOut, RefreshCw, CalendarCheck } from 'lucide-react';
+import { Classroom, TeacherDelegation, SchoolHoliday } from '../../types/observation';
+import { Calendar, Settings, Users, Shield, UserCheck, LogOut, RefreshCw, CalendarCheck, CalendarOff } from 'lucide-react';
 import { getTurso } from '../../db/tursoClient';
 import { SchoolLogo } from '../common/SchoolLogo';
 import { AuthUser } from '../auth/LoginPage';
@@ -13,6 +13,7 @@ interface HeaderProps {
   onClassroomChange: (id: string) => void;
   onOpenSettings: () => void;
   onOpenSubstitutes?: () => void;
+  onOpenHolidays?: () => void;
   schoolName: string;
   totalStudents: number;
   currentUser: AuthUser;
@@ -22,6 +23,8 @@ interface HeaderProps {
   lastSyncTime?: string | null;
   activeDelegations?: TeacherDelegation[];
   effectiveAssignedClasses?: string[];
+  activeHoliday?: SchoolHoliday;
+  isSunday?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -32,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
   onClassroomChange,
   onOpenSettings,
   onOpenSubstitutes,
+  onOpenHolidays,
   schoolName,
   totalStudents,
   currentUser,
@@ -41,6 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
   lastSyncTime,
   activeDelegations = [],
   effectiveAssignedClasses,
+  activeHoliday,
+  isSunday = false,
 }) => {
   const isCloudActive = !!getTurso();
   const todayStr = new Date().toISOString().split('T')[0];
@@ -149,6 +155,18 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
+          {/* Manage Holidays shortcut (Admin only) */}
+          {currentUser.role === 'admin' && onOpenHolidays && (
+            <button
+              onClick={onOpenHolidays}
+              className="p-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors border border-slate-700 text-xs font-bold flex items-center space-x-1.5"
+              title="Manage School Holidays & Closures"
+            >
+              <CalendarOff className="w-3.5 h-3.5 text-rose-400" />
+              <span className="hidden sm:inline">Holidays</span>
+            </button>
+          )}
+
           {/* Settings icon (Admin only or all) */}
           {currentUser.role === 'admin' && (
             <button
@@ -232,6 +250,58 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Non-Working Day / School Holiday Notification Banner */}
+      {(activeHoliday || isSunday) && (
+        <div
+          className={`px-4 py-2 border-t text-xs font-medium flex items-center justify-between ${
+            activeHoliday
+              ? 'bg-rose-950/95 border-rose-800 text-rose-200'
+              : 'bg-amber-950/95 border-amber-800 text-amber-200'
+          }`}
+        >
+          <div className="max-w-5xl mx-auto w-full flex items-center justify-between gap-3">
+            <div className="flex items-center space-x-2.5 min-w-0">
+              <CalendarOff
+                className={`w-4 h-4 shrink-0 ${
+                  activeHoliday ? 'text-rose-400' : 'text-amber-400'
+                }`}
+              />
+              <span className="truncate">
+                {activeHoliday ? (
+                  <>
+                    <strong className="text-white">School Holiday / Non-Working Day:</strong>{' '}
+                    <span className="underline font-bold text-rose-300">{activeHoliday.name}</span>{' '}
+                    <span className="px-1.5 py-0.2 rounded text-[10px] uppercase font-bold bg-rose-900 border border-rose-700 text-rose-200">
+                      {activeHoliday.category}
+                    </span>
+                    {activeHoliday.description && (
+                      <span className="hidden sm:inline text-slate-300 ml-1.5 italic">
+                        — {activeHoliday.description}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <strong className="text-white">Sunday (Weekend):</strong> School is closed today.
+                    Daily observations are not required.
+                  </>
+                )}
+              </span>
+            </div>
+
+            {currentUser.role === 'admin' && onOpenHolidays && (
+              <button
+                type="button"
+                onClick={onOpenHolidays}
+                className="text-[11px] font-bold underline shrink-0 hover:text-white transition-colors"
+              >
+                {activeHoliday ? 'Edit Holiday' : 'Holiday Settings'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 };

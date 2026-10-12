@@ -1,5 +1,5 @@
 import { createClient, Client } from '@libsql/client/web';
-import { DailyObservation, Student, Classroom, TeacherDelegation } from '../types/observation';
+import { DailyObservation, Student, Classroom, TeacherDelegation, SchoolHoliday } from '../types/observation';
 import { TeacherProfile } from '../auth/teacherWhitelist';
 
 let tursoInstance: Client | null = null;
@@ -538,6 +538,75 @@ export async function deleteTeacherDelegation(id: string): Promise<{ success: bo
   } catch (err: any) {
     console.error('Failed to delete teacher delegation:', err);
     return { success: false, error: err.message || 'Failed to delete delegation.' };
+  }
+}
+
+// -------------------------------------------------------------
+// School Holidays & Non-Working Days Management
+// -------------------------------------------------------------
+
+export async function fetchAllHolidays(): Promise<SchoolHoliday[]> {
+  const turso = getTurso();
+  if (!turso) return [];
+
+  try {
+    const res = await turso.execute('SELECT * FROM school_holidays ORDER BY date ASC');
+    return res.rows.map((r: any) => ({
+      id: String(r.id),
+      date: String(r.date),
+      name: String(r.name),
+      category: (String(r.category || 'Festival')) as any,
+      description: r.description ? String(r.description) : undefined,
+      created_by: r.created_by ? String(r.created_by) : undefined,
+      createdAt: r.created_at ? String(r.created_at) : undefined,
+    }));
+  } catch (err) {
+    console.error('Failed to fetch school holidays from Turso:', err);
+    return [];
+  }
+}
+
+export async function saveHolidayToCloud(
+  holiday: SchoolHoliday
+): Promise<{ success: boolean; error?: string }> {
+  const turso = getTurso();
+  if (!turso) return { success: false, error: 'Database client not connected.' };
+
+  try {
+    const holidayId = holiday.id || `hol_${holiday.date}_${Date.now()}`;
+    await turso.execute({
+      sql: `INSERT OR REPLACE INTO school_holidays (id, date, name, category, description, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        holidayId,
+        holiday.date,
+        holiday.name.trim(),
+        holiday.category || 'Festival',
+        holiday.description?.trim() || null,
+        holiday.created_by || 'Admin',
+        holiday.createdAt || new Date().toISOString(),
+      ],
+    });
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to save school holiday:', err);
+    return { success: false, error: err.message || 'Failed to save holiday.' };
+  }
+}
+
+export async function deleteHolidayFromCloud(id: string): Promise<{ success: boolean; error?: string }> {
+  const turso = getTurso();
+  if (!turso) return { success: false, error: 'Database client not connected.' };
+
+  try {
+    await turso.execute({
+      sql: 'DELETE FROM school_holidays WHERE id = ?',
+      args: [id],
+    });
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to delete school holiday:', err);
+    return { success: false, error: err.message || 'Failed to delete holiday.' };
   }
 }
 
