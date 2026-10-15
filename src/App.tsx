@@ -339,9 +339,12 @@ export const App: React.FC = () => {
     return dateObj.getDay() === 0;
   }, [selectedDate]);
 
-  // Active School Holiday for selectedDate
+  // Active School Holiday for selectedDate (supports single days and multi-day date ranges)
   const activeHoliday = useMemo(() => {
-    return holidays.find((h) => h.date === selectedDate);
+    return holidays.find((h) => {
+      const end = h.endDate && h.endDate >= h.date ? h.endDate : h.date;
+      return selectedDate >= h.date && selectedDate <= end;
+    });
   }, [holidays, selectedDate]);
 
   // Student navigation within current classroom
@@ -597,7 +600,7 @@ export const App: React.FC = () => {
 
         {currentTab === 'reports' && (
           <ReportsView
-            students={classroomStudents}
+            students={currentUser.role === 'admin' ? students : classroomStudents}
             classrooms={
               currentUser.role === 'admin'
                 ? classrooms

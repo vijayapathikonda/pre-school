@@ -113,7 +113,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         </div>
 
         {/* Footer info */}
-        <div className="pt-4 border-t border-gray-100 text-center">
+        <div className="pt-4 border-t border-gray-100 text-center space-y-2">
           <p className="text-[11px] text-gray-500">
             Need access? Contact Admin at{' '}
             <a
@@ -123,6 +123,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               vijaya.pathikonda@gmail.com
             </a>
           </p>
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-[11px] text-gray-600 font-medium">
+              Application developed by <span className="font-bold text-amber-600">Bhuvi Technologies</span>
+            </p>
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              Contact: <a href="tel:+917353432669" className="text-indigo-600 hover:underline font-semibold">+91-7353432669</a> for app development
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -298,6 +298,11 @@ export const ObservationForm: React.FC<ObservationFormProps> = ({
               <>
                 Today ({date}) is a scheduled School Holiday (
                 <strong>{activeHoliday.name}</strong> — {activeHoliday.category}
+                {activeHoliday.endDate && activeHoliday.endDate > activeHoliday.date && (
+                  <span className="font-bold text-rose-800 ml-1">
+                    • Vacation Range: {activeHoliday.date} to {activeHoliday.endDate}
+                  </span>
+                )}
                 ). Recording observation entries for holidays is optional.
               </>
             ) : (

@@ -29,7 +29,8 @@ export type HolidayCategory =
 
 export interface SchoolHoliday {
   id: string;
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD (Start date)
+  endDate?: string; // YYYY-MM-DD (End date for multi-day ranges / vacations)
   name: string;
   category: HolidayCategory;
   description?: string;

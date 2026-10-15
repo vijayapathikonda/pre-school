@@ -625,6 +625,7 @@ export async function fetchAllHolidays(): Promise<SchoolHoliday[]> {
     return res.rows.map((r: any) => ({
       id: String(r.id),
       date: String(r.date),
+      endDate: r.end_date ? String(r.end_date) : String(r.date),
       name: String(r.name),
       category: (String(r.category || 'Festival')) as any,
       description: r.description ? String(r.description) : undefined,
@@ -646,12 +647,14 @@ export async function saveHolidayToCloud(
 
   try {
     const holidayId = holiday.id || `hol_${holiday.date}_${Date.now()}`;
+    const endDate = holiday.endDate && holiday.endDate >= holiday.date ? holiday.endDate : holiday.date;
     await turso.execute({
-      sql: `INSERT OR REPLACE INTO school_holidays (id, date, name, category, description, created_by, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT OR REPLACE INTO school_holidays (id, date, end_date, name, category, description, created_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         holidayId,
         holiday.date,
+        endDate,
         holiday.name.trim(),
         holiday.category || 'Festival',
         holiday.description?.trim() || null,

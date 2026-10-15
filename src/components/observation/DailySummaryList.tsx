@@ -212,6 +212,11 @@ export const DailySummaryList: React.FC<DailySummaryListProps> = ({
               {activeHoliday ? (
                 <>
                   This date has been marked as a school holiday ({activeHoliday.category}).
+                  {activeHoliday.endDate && activeHoliday.endDate > activeHoliday.date && (
+                    <span className="block font-bold text-rose-800 mt-0.5">
+                      📅 Vacation Range: {activeHoliday.date} to {activeHoliday.endDate}
+                    </span>
+                  )}
                   Daily classroom observations are <strong>not required</strong> for this date, and pending records are expected.
                   {activeHoliday.description && (
                     <span className="block mt-1 italic font-medium text-slate-800">

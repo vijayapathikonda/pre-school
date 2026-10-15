@@ -80,7 +80,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             Child Observation & Daily Summary
           </p>
           <p className="text-[11px] text-slate-400 mt-1">
-            12 Classes • 266 Students • Turso Cloud Synchronized
+            12 Classes • 266 Students
           </p>
         </div>
 
@@ -148,8 +148,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </div>
 
         {/* Footer info */}
-        <div className="pt-4 border-t border-slate-800/80 text-center">
-          <p className="text-[11px] text-slate-500">
+        <div className="pt-4 border-t border-slate-800/80 text-center space-y-2">
+          <p className="text-[11px] text-slate-400">
             For login issues or new teacher onboarding, contact{' '}
             <a
               href="mailto:vijaya.pathikonda@gmail.com"
@@ -158,6 +158,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               vijaya.pathikonda@gmail.com
             </a>
           </p>
+          <div className="pt-2 border-t border-slate-800/60">
+            <p className="text-[11px] text-slate-300 font-medium">
+              Application developed by <span className="font-bold text-amber-400">Bhuvi Technologies</span>
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5">
+              Contact: <a href="tel:+917353432669" className="text-indigo-400 hover:underline font-semibold">+91-7353432669</a> for app development
+            </p>
+          </div>
         </div>
       </div>
     </div>

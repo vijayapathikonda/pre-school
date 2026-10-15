@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Classroom, TeacherDelegation, SchoolHoliday } from '../../types/observation';
-import { Calendar, Settings, Users, Shield, UserCheck, LogOut, RefreshCw, CalendarCheck, CalendarOff } from 'lucide-react';
+import { Calendar, Settings, Users, Shield, UserCheck, LogOut, RefreshCw, CalendarCheck, CalendarOff, BookOpen, ChevronDown } from 'lucide-react';
 import { getTurso } from '../../db/tursoClient';
 import { SchoolLogo } from '../common/SchoolLogo';
 import { AuthUser } from '../auth/LoginPage';
+import { generateUserManualPDF } from '../reports/pdfGenerator';
 
 interface HeaderProps {
   selectedDate: string;
@@ -48,6 +49,23 @@ export const Header: React.FC<HeaderProps> = ({
   activeHoliday,
   isSunday = false,
 }) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
   const isCloudActive = !!getTurso();
   const todayStr = new Date().toISOString().split('T')[0];
   const isToday = selectedDate === todayStr;
@@ -66,16 +84,18 @@ export const Header: React.FC<HeaderProps> = ({
     ? `Daily Child Observation — ${currentClass.name}`
     : `Daily Child Observation — All Classes (${totalStudents} Students)`;
 
+  const shortUsername = currentUser.username.split(' ')[0] || currentUser.username;
+
   return (
     <header className="bg-slate-900 text-white shadow-md border-b border-slate-800 sticky top-0 z-30">
       {/* Top Brand & User Session Bar */}
-      <div className="max-w-5xl mx-auto px-4 py-2 flex items-center justify-between gap-2">
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-2 flex items-center justify-between gap-2">
         
         {/* School Crest Logo & Dynamic Title */}
-        <div className="flex items-center space-x-2.5 min-w-0">
+        <div className="flex items-center space-x-2.5 min-w-0 flex-1">
           <SchoolLogo size="sm" />
-          <div className="min-w-0">
-            <h1 className="text-sm font-extrabold tracking-tight text-white leading-tight truncate">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xs sm:text-sm font-extrabold tracking-tight text-white leading-tight truncate">
               {schoolName || 'Pragathi Vidyalaya School'}
             </h1>
             <p className="text-[11px] font-bold text-amber-400 truncate">
@@ -84,25 +104,9 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* User Session Badge & Actions */}
+        {/* Cloud Sync + Options Dropdown Menu */}
         <div className="flex items-center space-x-2 shrink-0">
           
-          {/* User Role Badge */}
-          <div
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold border flex items-center space-x-1.5 ${
-              currentUser.role === 'admin'
-                ? 'bg-amber-950/80 border-amber-700/80 text-amber-300'
-                : 'bg-indigo-950/80 border-indigo-700/80 text-indigo-300'
-            }`}
-          >
-            {currentUser.role === 'admin' ? (
-              <Shield className="w-3.5 h-3.5 text-amber-400" />
-            ) : (
-              <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
-            )}
-            <span className="capitalize">{currentUser.username}</span>
-          </div>
-
           {/* Cloud Sync Button & Status */}
           {onManualSync && (
             <button
@@ -115,7 +119,7 @@ export const Header: React.FC<HeaderProps> = ({
                   ? `Turso Cloud Connected${lastSyncTime ? ` (Last sync: ${lastSyncTime})` : ''}. Tap to sync latest observations.`
                   : 'Running in offline mode. Tap to retry connection.'
               }
-              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+              className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                 isSyncing
                   ? 'bg-amber-950/80 border-amber-600 text-amber-300 cursor-wait'
                   : isCloudActive
@@ -138,55 +142,173 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Daily Substitutes shortcut (Admin only) */}
-          {currentUser.role === 'admin' && onOpenSubstitutes && (
+          {/* User & Quick Actions Dropdown */}
+          <div className="relative" ref={menuRef}>
             <button
-              onClick={onOpenSubstitutes}
-              className="p-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors border border-slate-700 text-xs font-bold flex items-center space-x-1.5"
-              title="Daily Teacher Substitutes"
+              type="button"
+              onClick={() => setIsMenuOpen((prev) => !prev)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border flex items-center space-x-1.5 transition-all cursor-pointer ${
+                currentUser.role === 'admin'
+                  ? 'bg-amber-950/80 hover:bg-amber-900/80 border-amber-700/80 text-amber-300'
+                  : 'bg-indigo-950/80 hover:bg-indigo-900/80 border-indigo-700/80 text-indigo-300'
+              }`}
+              title="Open Menu (Substitutes, Holidays, User Guide, Settings & Logout)"
             >
-              <CalendarCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Substitutes</span>
-              {activeDelegations.length > 0 && (
-                <span className="w-4 h-4 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center">
+              {currentUser.role === 'admin' ? (
+                <Shield className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              ) : (
+                <UserCheck className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              )}
+              <span className="capitalize sm:hidden max-w-[85px] truncate">{shortUsername}</span>
+              <span className="capitalize hidden sm:inline">{currentUser.username}</span>
+              {activeDelegations.length > 0 && currentUser.role === 'admin' && (
+                <span className="w-4 h-4 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center shrink-0">
                   {activeDelegations.length}
                 </span>
               )}
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform duration-150 shrink-0 ${
+                  isMenuOpen ? 'rotate-180' : ''
+                }`}
+              />
             </button>
-          )}
 
-          {/* Manage Holidays shortcut (Admin only) */}
-          {currentUser.role === 'admin' && onOpenHolidays && (
-            <button
-              onClick={onOpenHolidays}
-              className="p-1.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors border border-slate-700 text-xs font-bold flex items-center space-x-1.5"
-              title="Manage School Holidays & Closures"
-            >
-              <CalendarOff className="w-3.5 h-3.5 text-rose-400" />
-              <span className="hidden sm:inline">Holidays</span>
-            </button>
-          )}
+            {/* Dropdown Panel */}
+            {isMenuOpen && (
+              <div className="absolute right-0 mt-2 w-64 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1.5 z-50 divide-y divide-slate-800">
+                {/* Signed-in User Info */}
+                <div className="px-3.5 py-2.5 bg-slate-950/60">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-extrabold text-white capitalize truncate">
+                      {currentUser.username}
+                    </p>
+                    <span
+                      className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded border shrink-0 ${
+                        currentUser.role === 'admin'
+                          ? 'bg-amber-950/90 border-amber-700 text-amber-300'
+                          : 'bg-indigo-950/90 border-indigo-700 text-indigo-300'
+                      }`}
+                    >
+                      {currentUser.role === 'admin' ? 'Admin' : 'Teacher'}
+                    </span>
+                  </div>
+                  {currentUser.email && (
+                    <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                      {currentUser.email}
+                    </p>
+                  )}
+                </div>
 
-          {/* Settings icon (Admin only or all) */}
-          {currentUser.role === 'admin' && (
-            <button
-              onClick={onOpenSettings}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors border border-slate-700"
-              title="School & Cloud Settings"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          )}
+                {/* Menu Items */}
+                <div className="py-1">
+                  {/* Daily Substitutes (Admin only) */}
+                  {currentUser.role === 'admin' && onOpenSubstitutes && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        onOpenSubstitutes();
+                      }}
+                      className="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center justify-between transition-colors"
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <div className="p-1.5 rounded-lg bg-amber-950/80 border border-amber-800/70 text-amber-400">
+                          <CalendarCheck className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-100">Daily Substitutes</p>
+                          <p className="text-[10px] text-slate-400">Assign temporary class cover</p>
+                        </div>
+                      </div>
+                      {activeDelegations.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
+                          {activeDelegations.length}
+                        </span>
+                      )}
+                    </button>
+                  )}
 
-          {/* Logout Button */}
-          <button
-            onClick={onLogout}
-            className="p-1.5 px-2.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300 hover:text-rose-200 border border-rose-800/80 text-xs font-bold flex items-center space-x-1.5 transition-colors"
-            title="Log Out"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Logout</span>
-          </button>
+                  {/* Holidays & Closures (Admin only) */}
+                  {currentUser.role === 'admin' && onOpenHolidays && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        onOpenHolidays();
+                      }}
+                      className="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center space-x-2.5 transition-colors"
+                    >
+                      <div className="p-1.5 rounded-lg bg-rose-950/80 border border-rose-800/70 text-rose-400">
+                        <CalendarOff className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-100">Holidays & Closures</p>
+                        <p className="text-[10px] text-slate-400">Manage non-working days</p>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* User Guide PDF (All Users) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      generateUserManualPDF(schoolName);
+                    }}
+                    className="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center space-x-2.5 transition-colors"
+                  >
+                    <div className="p-1.5 rounded-lg bg-indigo-950/80 border border-indigo-800/70 text-indigo-400">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-100">User Guide (PDF)</p>
+                      <p className="text-[10px] text-slate-400">Download operations manual</p>
+                    </div>
+                  </button>
+
+                  {/* School & Cloud Settings (Admin only) */}
+                  {currentUser.role === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        onOpenSettings();
+                      }}
+                      className="w-full px-3.5 py-2.5 text-left hover:bg-slate-800 flex items-center space-x-2.5 transition-colors"
+                    >
+                      <div className="p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">
+                        <Settings className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-100">School & Cloud Settings</p>
+                        <p className="text-[10px] text-slate-400">Database, backup & school info</p>
+                      </div>
+                    </button>
+                  )}
+                </div>
+
+                {/* Logout */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onLogout();
+                    }}
+                    className="w-full px-3.5 py-2 text-left hover:bg-rose-950/60 flex items-center space-x-2.5 text-rose-400 transition-colors"
+                  >
+                    <div className="p-1.5 rounded-lg bg-rose-950/80 border border-rose-800/70 text-rose-400">
+                      <LogOut className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-rose-300">Log Out</p>
+                      <p className="text-[10px] text-rose-400/80">Sign out of your account</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -275,6 +397,11 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className="px-1.5 py-0.2 rounded text-[10px] uppercase font-bold bg-rose-900 border border-rose-700 text-rose-200">
                       {activeHoliday.category}
                     </span>
+                    {activeHoliday.endDate && activeHoliday.endDate > activeHoliday.date && (
+                      <span className="text-[11px] font-bold text-amber-300 ml-1.5 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800">
+                        📅 {activeHoliday.date} to {activeHoliday.endDate}
+                      </span>
+                    )}
                     {activeHoliday.description && (
                       <span className="hidden sm:inline text-slate-300 ml-1.5 italic">
                         — {activeHoliday.description}

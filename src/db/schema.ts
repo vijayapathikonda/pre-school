@@ -24,6 +24,9 @@ export class PreschoolDatabase extends Dexie {
       settings: 'key',
       holidays: 'id, date, category'
     });
+    this.version(6).stores({
+      holidays: 'id, date, endDate, category'
+    });
   }
 }
 

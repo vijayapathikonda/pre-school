@@ -39,6 +39,7 @@ import { db } from '../../db/schema';
 import { exportAllDataAsJSON, importDataFromJSON, downloadFile } from '../../db/exportImport';
 import { Classroom, TeacherDelegation, SchoolHoliday, HolidayCategory } from '../../types/observation';
 import { REAL_CLASSROOMS } from '../../db/sampleData';
+import { generateUserManualPDF } from '../reports/pdfGenerator';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -106,6 +107,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [holidaysList, setHolidaysList] = useState<SchoolHoliday[]>([]);
   const [holidaysLoading, setHolidaysLoading] = useState(false);
   const [holidayDate, setHolidayDate] = useState(selectedDate || todayStr);
+  const [holidayEndDate, setHolidayEndDate] = useState(selectedDate || todayStr);
   const [holidayName, setHolidayName] = useState('');
   const [holidayCategory, setHolidayCategory] = useState<HolidayCategory>('Festival');
   const [holidayDesc, setHolidayDesc] = useState('');
@@ -126,6 +128,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (selectedDate) {
       setDelegationDate(selectedDate);
       setHolidayDate(selectedDate);
+      setHolidayEndDate(selectedDate);
     }
   }, [selectedDate]);
 
@@ -453,16 +456,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSaveHoliday = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!holidayDate || !holidayName.trim()) {
-      setHolidayMessage({ text: 'Please enter both the date and holiday name.', type: 'error' });
+      setHolidayMessage({ text: 'Please enter the start date and holiday name.', type: 'error' });
+      return;
+    }
+
+    if (holidayEndDate && holidayEndDate < holidayDate) {
+      setHolidayMessage({ text: 'End date cannot be earlier than start date.', type: 'error' });
       return;
     }
 
     setHolidaySubmitting(true);
     setHolidayMessage(null);
 
+    const isRange = Boolean(holidayEndDate && holidayEndDate > holidayDate);
+    const dayCount = isRange
+      ? Math.round((new Date(holidayEndDate).getTime() - new Date(holidayDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+      : 1;
+
     const holiday: SchoolHoliday = {
       id: `hol_${holidayDate}_${Date.now()}`,
       date: holidayDate,
+      endDate: isRange ? holidayEndDate : holidayDate,
       name: holidayName.trim(),
       category: holidayCategory,
       description: holidayDesc.trim() || undefined,
@@ -476,7 +490,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     if (res.success) {
       setHolidayMessage({
-        text: `🎉 Successfully marked "${holiday.name}" on ${holidayDate} as a School Holiday!`,
+        text: isRange
+          ? `🎉 Successfully marked "${holiday.name}" for ${dayCount} days (${holidayDate} to ${holidayEndDate}) as a School Holiday Vacation!`
+          : `🎉 Successfully marked "${holiday.name}" on ${holidayDate} as a School Holiday!`,
         type: 'success',
       });
       setHolidayName('');
@@ -489,7 +505,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleDeleteHoliday = async (hol: SchoolHoliday) => {
-    if (!confirm(`Remove "${hol.name}" on ${hol.date} from the school holiday calendar?`)) {
+    const isRange = Boolean(hol.endDate && hol.endDate > hol.date);
+    const promptMsg = isRange
+      ? `Remove "${hol.name}" (${hol.date} to ${hol.endDate}) from the school holiday calendar?`
+      : `Remove "${hol.name}" on ${hol.date} from the school holiday calendar?`;
+
+    if (!confirm(promptMsg)) {
       return;
     }
 
@@ -707,6 +728,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="hidden"
                     />
                   </label>
+
+                  <button
+                    type="button"
+                    onClick={() => generateUserManualPDF(currentSchoolName)}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-2xs flex items-center space-x-1.5 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5 text-white" />
+                    <span>Download User Manual (PDF)</span>
+                  </button>
                 </div>
               </section>
 
@@ -1227,16 +1257,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </h4>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-800 mb-1">
-                      Date *
+                      Start Date (From) *
                     </label>
                     <input
                       type="date"
                       required
                       value={holidayDate}
-                      onChange={(e) => setHolidayDate(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setHolidayDate(val);
+                        if (!holidayEndDate || holidayEndDate < val) {
+                          setHolidayEndDate(val);
+                        }
+                      }}
+                      className="w-full text-xs font-semibold px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                      End Date (To)
+                    </label>
+                    <input
+                      type="date"
+                      min={holidayDate}
+                      value={holidayEndDate}
+                      onChange={(e) => setHolidayEndDate(e.target.value)}
                       className="w-full text-xs font-semibold px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                   </div>
@@ -1248,7 +1297,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Diwali, Staff Training, Ayudha Puja"
+                      placeholder="e.g. Dussehra Holidays, Diwali, Staff Training"
                       value={holidayName}
                       onChange={(e) => setHolidayName(e.target.value)}
                       className="w-full text-xs font-semibold px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -1272,6 +1321,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </select>
                   </div>
                 </div>
+
+                {/* Duration / Range Helper */}
+                {holidayDate && (
+                  <div className="flex items-center space-x-2 text-xs py-1.5 px-3 rounded-lg bg-white border border-slate-200">
+                    {holidayEndDate && holidayEndDate > holidayDate ? (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                        <span className="font-extrabold text-amber-700">🌴 Multi-Day Vacation Selected:</span>
+                        <span className="font-extrabold text-indigo-900">
+                          {Math.round((new Date(holidayEndDate).getTime() - new Date(holidayDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} Days
+                        </span>
+                        <span className="text-slate-500 font-medium">
+                          ({holidayDate} to {holidayEndDate})
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                        <span className="font-bold text-emerald-800">Single Day Holiday (1 Day):</span>
+                        <span className="text-slate-600">{holidayDate}</span>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-800 mb-1">
@@ -1314,6 +1387,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {holidaysList.map((hol) => {
+                      const isMultiDay = Boolean(hol.endDate && hol.endDate > hol.date);
+                      const dayCount = isMultiDay
+                        ? Math.round((new Date(hol.endDate!).getTime() - new Date(hol.date).getTime()) / (1000 * 60 * 60 * 24)) + 1
+                        : 1;
+
                       const badgeColor =
                         hol.category === 'Festival'
                           ? 'bg-amber-100 text-amber-900 border-amber-300'
@@ -1340,9 +1418,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeColor}`}>
                                   {hol.category}
                                 </span>
+                                {isMultiDay && (
+                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full border bg-amber-50 text-amber-900 border-amber-300 shrink-0">
+                                    🌴 {dayCount} Days Range
+                                  </span>
+                                )}
                               </div>
                               <p className="text-[11px] font-mono text-slate-600 truncate mt-0.5">
-                                📅 {hol.date}
+                                {isMultiDay ? (
+                                  <>
+                                    📅 <strong>{hol.date}</strong> to <strong>{hol.endDate}</strong> ({dayCount} days total)
+                                  </>
+                                ) : (
+                                  <>📅 {hol.date} (1 day)</>
+                                )}
                               </p>
                               {hol.description && (
                                 <p className="text-[10px] text-slate-500 italic truncate mt-0.5">

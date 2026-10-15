@@ -1,4 +1,5 @@
 import { DailyObservation, Student } from '../types/observation';
+import { AIStudentInsight } from './geminiInsights';
 
 export function formatObservationForWhatsApp(
   student: Student,
@@ -65,6 +66,49 @@ _${obs.additionalObservation.trim()}_
 
 export function shareViaWhatsApp(student: Student, obs: DailyObservation, schoolName?: string) {
   const message = formatObservationForWhatsApp(student, obs, schoolName);
+  const encoded = encodeURIComponent(message);
+  window.open(`https://wa.me/?text=${encoded}`, '_blank');
+}
+
+export function formatAIInsightsForWhatsApp(
+  insight: AIStudentInsight,
+  schoolName: string = 'Pragathi Vidyalaya School'
+): string {
+  const strengths =
+    insight.highlights && insight.highlights.length > 0
+      ? `\n🌟 *Key Highlights:* ${insight.highlights.join(' • ')}\n`
+      : '';
+
+  const recs =
+    insight.recommendations && insight.recommendations.length > 0
+      ? `\n💡 *Gentle Next Steps:*\n${insight.recommendations.map((r) => `• ${r}`).join('\n')}\n`
+      : '';
+
+  return `🏫 *${schoolName}*
+✨ *CHILD PROGRESS & LEARNING INSIGHTS*
+━━━━━━━━━━━━━━━━━━━━
+👤 *Child:* ${insight.studentName}
+🏫 *Class:* ${insight.classroomName}
+🗓️ *Period:* ${insight.periodLabel} (${insight.dateRange})
+📊 *Attendance:* ${insight.presentDaysCount}/${insight.analyzedDaysCount} Days Present
+${strengths}
+📝 *Overall Summary:*
+${insight.overallSummary}
+
+📚 *Academic & Learning Patterns:*
+${insight.academicAndLearning}
+
+🤝 *Social & Classroom Participation:*
+${insight.socialAndParticipation}
+
+😊 *Mood & Emotional Disposition:*
+${insight.moodAndDisposition}
+${recs}━━━━━━━━━━━━━━━━━━━━
+💛 Warm regards, ${schoolName}`;
+}
+
+export function shareAIInsightsViaWhatsApp(insight: AIStudentInsight, schoolName?: string) {
+  const message = formatAIInsightsForWhatsApp(insight, schoolName);
   const encoded = encodeURIComponent(message);
   window.open(`https://wa.me/?text=${encoded}`, '_blank');
 }
